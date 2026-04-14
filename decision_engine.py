@@ -1,35 +1,65 @@
 # Importamos la clase que creamos en el otro archivo
 from clinical_models import PacienteIRA
 
-def evaluar_paciente(paciente: PacienteIRA) -> str:
+def evaluar_paciente(paciente: PacienteIRA) -> dict:
     """
-    Motor de inferencia clínica. Evalúa los datos del paciente 
-    y retorna una recomendación de tratamiento.
+    Motor de inferencia clínica. 
+    Retorna un diccionario con el 'diagnostico' y el 'tratamiento'.
     """
-    # 1. Triage: Descartar Urgencias Médicas (Banderas Rojas)
-    if paciente.tiene_banderas_rojas():
-        return "🚨 ALERTA: Criterios de urgencia detectados (Hipoxia o Taquipnea). Derivar a segundo nivel. No manejar en consultorio."
+    
+    # --- BASE DE DATOS DE TRATAMIENTOS SUGERIDOS ---
+    guias = {
+        "urgencia": "• Oxigenoterapia suplementaria (Meta >92%).\n• Posición semifowler.\n• Traslado inmediato a segundo nivel para manejo de vía aérea.",
+        "viral": "• Paracetamol: 500mg c/8h (Fiebre/Dolor).\n• Hidratación abundante y reposo.\n• Lavados nasales con solución salina.\n• NO usar antibióticos ni esteroides.",
+        "bacteriana": "• Amoxicilina: 500mg c/8h por 10 días (Primera línea).\n• Alternativa: Penicilina V o Cefalosporinas de 1ª gen.\n• Paracetamol para control térmico.",
+        "prolongada": "• Considerar Amoxicilina/Ácido Clavulánico por riesgo de sobreinfección.\n• Reevaluar foco pulmonar (Radiografía de tórax).",
+        "gris": "• Manejo sintomático inicial.\n• Realizar RADT (Prueba rápida) o Cultivo faríngeo.\n• Vigilancia estrecha de datos de alarma."
+    }
 
-    # 2. Pacientes de Alto Riesgo (Comorbilidades)
+    # 1. Triage: Banderas Rojas
+    if paciente.tiene_banderas_rojas():
+        return {
+            "tipo": "urgencia",
+            "diagnostico": "🚨 ALERTA: Criterios de urgencia detectados (Hipoxia o Taquipnea).",
+            "tratamiento": guias["urgencia"]
+        }
+
+    # 2. Pacientes de Alto Riesgo
     if paciente.tiene_riesgo_elevado():
-        return "⚠️ PRECAUCIÓN: Paciente con comorbilidad de alto riesgo.\n▶ Alto riesgo de exacerbación. Considerar derivación o antibiótico temprano."
-    # Si no hay banderas rojas, calculamos los scores
+        return {
+            "tipo": "gris",
+            "diagnostico": "⚠️ PRECAUCIÓN: Paciente con comorbilidad de alto riesgo.",
+            "tratamiento": guias["gris"]
+        }
+
     score_bacteriano = paciente.calcular_score_centor()
     signos_virales = paciente.contar_signos_virales()
 
-    # 2. Árbol de Decisiones Clínicas
-    # Regla A: Temporalidad
+    # 3. Árbol de Decisiones
     if paciente.dias_evolucion > 10:
-        return "⚠️ ALERTA: Evolución prolongada (>10 días). Alto riesgo de sobreinfección bacteriana. Considerar antibiótico."
+        return {
+            "tipo": "bacteriana",
+            "diagnostico": "⚠️ ALERTA: Evolución prolongada (>10 días). Riesgo de sobreinfección.",
+            "tratamiento": guias["prolongada"]
+        }
 
-    # Regla B: Alta probabilidad Viral
     elif signos_virales >= 2 and score_bacteriano <= 2:
-        return "🦠 DIAGNÓSTICO: Probabilidad VIRAL alta. \n▶ Manejo sintomático (Paracetamol/Ibuprofeno). \n▶ PROHIBIDO prescribir antibióticos o dexametasona."
+        return {
+            "tipo": "viral",
+            "diagnostico": "🦠 DIAGNÓSTICO: Probabilidad VIRAL alta.",
+            "tratamiento": guias["viral"]
+        }
 
-    # Regla C: Alta probabilidad Bacteriana (Criterios de McIsaac)
     elif score_bacteriano >= 4:
-        return "🧫 DIAGNÓSTICO: Probabilidad BACTERIANA alta (Sospecha Estreptocócica). \n▶ Iniciar esquema antibiótico empírico de primera línea."
+        return {
+            "tipo": "bacteriana",
+            "diagnostico": "🧫 DIAGNÓSTICO: Probabilidad BACTERIANA alta (Criterios McIsaac).",
+            "tratamiento": guias["bacteriana"]
+        }
 
-    # Regla D: Zona Gris (El paciente no cumple criterios fuertes para ninguno)
     else:
-        return "🩺 DIAGNÓSTICO: Zona gris (Indeterminado). \n▶ Manejo sintomático inicial. \n▶ Educar sobre datos de alarma y revaluar en 48-72 horas. No dar antibiótico de inicio."
+        return {
+            "tipo": "gris",
+            "diagnostico": "镜 DIAGNÓSTICO: Zona gris (Indeterminado).",
+            "tratamiento": guias["gris"]
+        }
