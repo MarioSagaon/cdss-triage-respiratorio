@@ -1,9 +1,11 @@
 import streamlit as st
 import base64
+import json
 from datetime import datetime
 import streamlit.components.v1 as components
 from clinical_models import PacienteIRA, PacienteNeumoniaCAP, PacienteOMA, PacienteSinusitis
 from decision_engine import evaluar_paciente, evaluar_neumonia, evaluar_oma, evaluar_sinusitis
+from interoperability import generar_decision_id, generar_fhir_r4, generar_json_estructurado
 
 # ─────────────────────────────────────────
 # UTILIDADES
@@ -896,10 +898,11 @@ elif st.session_state.pantalla == "resultados":
     diagnostico = resultado["diagnostico"]
     tratamiento = resultado["tratamiento"]
 
-    ahora     = datetime.now()
-    fecha_str = ahora.strftime("%d %b %Y").upper()
-    hora_str  = ahora.strftime("%H:%M")
-    folio     = ahora.strftime("SITRE-%Y%m%d-%H%M")
+    ahora         = datetime.now()
+    fecha_str     = ahora.strftime("%d %b %Y").upper()
+    hora_str      = ahora.strftime("%H:%M")
+    decision_info = generar_decision_id(paciente, resultado, ahora)
+    folio         = decision_info["decision_id"]
 
     # Score labels por patología
     if patologia == "faringitis" and paciente:
@@ -931,8 +934,9 @@ elif st.session_state.pantalla == "resultados":
         viral_label = "Indicador"
         viral_max = 5
 
-    score_pct = min(max(score_val/score_max,0),1)*100 if score_max>0 else 0
-    viral_pct = min(max(viral_val/viral_max,0),1)*100 if viral_max>0 else 0
+    score_pct  = min(max(score_val/score_max,0),1)*100 if score_max>0 else 0
+    viral_pct  = min(max(viral_val/viral_max,0),1)*100 if viral_max>0 else 0
+    score_info = {"val": score_val, "max": score_max, "label": score_label}
 
     CONFIGS = {
         "urgencia":   {"accent":"#EF4444","glow":"rgba(239,68,68,0.3)", "bg":"rgba(239,68,68,0.07)", "tag":"EMERGENCIA",   "label":"Derivación Inmediata a Urgencias",       "emoji":"🚨","pcol":"#EF4444"},
@@ -972,6 +976,12 @@ elif st.session_state.pantalla == "resultados":
     # Nombre de patología para mostrar
     NOMBRES_PAT = {"faringitis":"Faringitis","neumonia":"Neumonía CAP","oma":"Otitis Media Aguda","sinusitis":"Sinusitis Aguda"}
     nombre_pat_display = NOMBRES_PAT.get(patologia,"IRA")
+    metadatos = {
+        "patologia": patologia,
+        "nombre_paciente": nombre_pac,
+        "nombre_pat_display": nombre_pat_display,
+        "score_info": score_info,
+    }
 
     st.markdown(f"""
 <style>
@@ -1093,14 +1103,21 @@ elif st.session_state.pantalla == "resultados":
       <div class="meta-folio">Reporte Clínico · SITRE CDSS v2.0 · {nombre_pat_display}</div>
       <div class="meta-datetime">📅 {fecha_str} &nbsp;·&nbsp; 🕒 {hora_str} hrs</div>
     </div>
-    <div class="meta-right"><b style="color:var(--teal-light);">{folio}</b><br>Noreste · Coahuila / NL</div>
+    <div class="meta-right">
+      <b style="color:var(--teal-light); font-family:monospace; font-size:0.85rem;">{folio}</b><br>
+      <span style="font-size:0.58rem; color:rgba(240,253,250,0.35); font-family:monospace; letter-spacing:0.5px;">SHA-256·{decision_info["hash_short"]}…</span><br>
+      Noreste · Coahuila / NL
+    </div>
   </div>
   <div class="patient-bar">
     <div>
       <div class="patient-label">Paciente evaluado</div>
       <div class="patient-name">{nombre_pac}</div>
     </div>
-    <div class="patient-folio"><span style="color:var(--teal-light);">●</span> Triage activo<br>Folio: {folio}</div>
+    <div class="patient-folio">
+      <span style="color:var(--teal-light);">●</span> Triage activo<br>
+      <span style="font-family:monospace;">{folio}</span>
+    </div>
   </div>
   <div class="res-hero">
     <div class="res-hero-bg"></div>
@@ -1426,6 +1443,103 @@ elif st.session_state.pantalla == "resultados":
     </div>
     """, unsafe_allow_html=True)
 
+    # ── INTEROPERABILIDAD & AUDIT TRAIL ───────────────────────────────────────
+    fhir_data       = generar_fhir_r4(paciente, resultado, decision_info, metadatos)
+    research_data   = generar_json_estructurado(paciente, resultado, decision_info, metadatos)
+    fhir_bytes      = json.dumps(fhir_data,     indent=2, ensure_ascii=False).encode("utf-8")
+    research_bytes  = json.dumps(research_data, indent=2, ensure_ascii=False).encode("utf-8")
+    abx_tag = "ABX_AVOIDED" if tipo == "viral" else ("ABX_PRESCRIBED" if tipo == "bacteriana" else "ESCALATION")
+
+    st.markdown(f"""
+<div style="max-width:980px; margin:0 auto 24px; background:rgba(13,148,136,0.05);
+    border:1px solid rgba(13,148,136,0.25); border-radius:20px; padding:24px 28px;
+    animation:fade-up 0.5s 0.55s both;">
+
+  <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:18px;">
+    <div style="display:flex; align-items:center; gap:12px;">
+      <span style="font-size:1.4rem;">🔗</span>
+      <div>
+        <div style="font-size:0.58rem; font-weight:700; letter-spacing:3px; text-transform:uppercase; color:#14B8A6;">
+          Interoperabilidad &amp; Audit Trail
+        </div>
+        <div style="font-size:0.8rem; color:rgba(240,253,250,0.55); margin-top:2px;">
+          HL7 FHIR R4 · Structured JSON · SHA-256 Integrity
+        </div>
+      </div>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <span style="font-size:0.58rem; font-weight:700; padding:4px 12px; border-radius:99px;
+          background:rgba(34,197,94,0.12); color:#22C55E; border:1px solid rgba(34,197,94,0.3);">
+        ● DETERMINISTIC ENGINE
+      </span>
+      <span style="font-size:0.58rem; font-weight:700; padding:4px 12px; border-radius:99px;
+          background:rgba(59,130,246,0.12); color:#3B82F6; border:1px solid rgba(59,130,246,0.3);">
+        ● {abx_tag}
+      </span>
+    </div>
+  </div>
+
+  <div style="background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.07);
+      border-radius:12px; padding:14px 18px; margin-bottom:16px; font-family:monospace;">
+    <div style="font-size:0.58rem; font-weight:700; letter-spacing:2px; text-transform:uppercase;
+        color:rgba(240,253,250,0.4); margin-bottom:8px;">Decision ID · Audit Hash</div>
+    <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+      <span style="font-size:1rem; font-weight:700; color:#14B8A6; letter-spacing:1.5px;">{folio}</span>
+      <span style="font-size:0.68rem; color:rgba(240,253,250,0.45);">
+        SHA-256 · {decision_info["hash_full"][:32]}…
+      </span>
+    </div>
+    <div style="margin-top:8px; font-size:0.62rem; color:rgba(240,253,250,0.3); line-height:1.5;">
+      Hash: SHA-256(timestamp_utc + decision_type + clinical_snapshot) · Algoritmo: determinístico · Reproducible
+    </div>
+  </div>
+
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:0px;">
+    <div style="background:rgba(59,130,246,0.06); border:1px solid rgba(59,130,246,0.2);
+        border-radius:12px; padding:14px 16px;">
+      <div style="font-size:0.58rem; font-weight:700; letter-spacing:2px; text-transform:uppercase;
+          color:#3B82F6; margin-bottom:6px;">⬡ FHIR R4 Bundle</div>
+      <div style="font-size:0.75rem; color:rgba(240,253,250,0.55); line-height:1.5;">
+        Observation + AuditEvent · HL7 R4 · SNOMED/LOINC<br>
+        <span style="color:rgba(240,253,250,0.3);">Compatible con HIS/EHR hospitalarios</span>
+      </div>
+    </div>
+    <div style="background:rgba(34,197,94,0.06); border:1px solid rgba(34,197,94,0.2);
+        border-radius:12px; padding:14px 16px;">
+      <div style="font-size:0.58rem; font-weight:700; letter-spacing:2px; text-transform:uppercase;
+          color:#22C55E; margin-bottom:6px;">{"{ }"} Research JSON</div>
+      <div style="font-size:0.75rem; color:rgba(240,253,250,0.55); line-height:1.5;">
+        Features listas para ML · Stewardship · DOIs<br>
+        <span style="color:rgba(240,253,250,0.3);">Listo para análisis epidemiológico / Python / R</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+    """, unsafe_allow_html=True)
+
+    col_i1, col_i2 = st.columns(2)
+    with col_i1:
+        st.download_button(
+            label="⬡  Exportar FHIR R4 Bundle",
+            data=fhir_bytes,
+            file_name=f"SITRE_{folio}_FHIR_R4.json",
+            mime="application/json",
+            use_container_width=True,
+            help="HL7 FHIR R4 — Observation + AuditEvent. Compatible con sistemas HIS/EHR hospitalarios.",
+        )
+    with col_i2:
+        st.download_button(
+            label="{ }  Exportar Research JSON",
+            data=research_bytes,
+            file_name=f"SITRE_{folio}_research.json",
+            mime="application/json",
+            use_container_width=True,
+            help="JSON estructurado con features para ML, stewardship antimicrobiano y análisis epidemiológico.",
+        )
+
+    st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+
     # Botones
     col_a, col_b, col_c = st.columns([1,1.2,1])
     with col_b:
@@ -1465,7 +1579,7 @@ elif st.session_state.pantalla == "resultados":
                     },
                 }
                 instruccion = INSTRUCCIONES_PAT.get(patologia, {}).get(tipo, "Siga las indicaciones de su medico y regrese si sus sintomas empeoran.")
-                qr_text = f"SITRE-{folio}\nPaciente: {nombre_pac}\nDx: {c['tag']} - {nombre_pat_display}\n\n{instruccion}"
+                qr_text = f"{folio}\nPaciente: {nombre_pac}\nDx: {c['tag']} - {nombre_pat_display}\n\n{instruccion}"
 
                 qr = qrcode.QRCode(version=2, box_size=4, border=2,
                     error_correction=qrcode.constants.ERROR_CORRECT_M)
