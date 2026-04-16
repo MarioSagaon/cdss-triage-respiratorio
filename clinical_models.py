@@ -23,7 +23,8 @@ class PacienteIRA:
     nauseas_vomito: bool
     neumopatia_cronica: bool
     inmunocompromiso: bool
-
+    diabetes_mellitus: bool = False  # NUEVO CAMPO
+    
     def calcular_score_centor(self) -> int:
         score = 0
         if self.fiebre_mayor_38:            score += 1
@@ -38,7 +39,7 @@ class PacienteIRA:
         return self.saturacion_oxigeno < 90.0 or self.frecuencia_respiratoria > 24
 
     def tiene_riesgo_elevado(self) -> bool:
-        return self.neumopatia_cronica or self.inmunocompromiso
+        return self.neumopatia_cronica or self.inmunocompromiso or self.diabetes_mellitus
 
     def contar_signos_virales(self) -> int:
         return sum([
@@ -72,7 +73,8 @@ class PacienteNeumoniaCAP:
     tos_productiva: bool
     dolor_toracico: bool
     escalofrios: bool
-
+    diabetes_mellitus: bool = False
+    
     def calcular_curb65(self) -> int:
         """Score CURB-65: 1 punto por cada criterio presente."""
         score = 0
@@ -87,7 +89,7 @@ class PacienteNeumoniaCAP:
         return self.saturacion_oxigeno < 90.0 or self.frecuencia_respiratoria > 30
 
     def tiene_riesgo_elevado(self) -> bool:
-        return self.neumopatia_cronica or self.inmunocompromiso
+        return self.neumopatia_cronica or self.inmunocompromiso or self.diabetes_mellitus
 
     def nivel_severidad(self) -> str:
         s = self.calcular_curb65()
@@ -123,6 +125,7 @@ class PacienteOMA:
     # Comorbilidades
     inmunocompromiso: bool
     episodios_previos: int        # Número de episodios en últimos 6 meses
+    diabetes_mellitus: bool = False
 
     def criterios_diagnosticos(self) -> int:
         """
@@ -143,9 +146,9 @@ class PacienteOMA:
     def es_recurrente(self) -> bool:
         """OMA recurrente: ≥3 episodios en 6 meses."""
         return self.episodios_previos >= 3
-
+    
     def tiene_riesgo_elevado(self) -> bool:
-        return self.inmunocompromiso or self.edad < 6 or self.es_recurrente()
+        return self.inmunocompromiso or self.edad < 6 or self.es_recurrente() or self.diabetes_mellitus
 
     def nivel_diagnostico(self) -> str:
         c = self.criterios_diagnosticos()
@@ -181,6 +184,7 @@ class PacienteSinusitis:
     # Comorbilidades
     inmunocompromiso: bool
     asma_rinitis_alergica: bool
+    diabetes_mellitus: bool = False
 
     def tiene_banderas_rojas(self) -> bool:
         """Signos de complicación — derivación urgente."""

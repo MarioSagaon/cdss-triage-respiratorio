@@ -464,7 +464,10 @@ elif st.session_state.pantalla == "triage":
         st.code(datetime.now().strftime("SITRE-%Y%m%d-%H%M"), language=None)
 
     st.markdown("<hr style='opacity:0.1; margin:14px 0;'>", unsafe_allow_html=True)
-
+    diabetes = False
+    diabetes_n = False
+    diabetes_o = False
+    diabetes_s = False
     # ══ FORMULARIO FARINGITIS ══════════════════════
     if patologia == "faringitis":
         col_l, col_r = st.columns([1,1], gap="large")
@@ -480,6 +483,7 @@ elif st.session_state.pantalla == "triage":
             st.markdown('<span class="section-label">02 · Comorbilidades</span>', unsafe_allow_html=True)
             neumopatia = st.toggle("Neumopatía crónica (Asma/EPOC)", value=d.get("neumopatia",False))
             inmuno     = st.toggle("Inmunocompromiso", value=d.get("inmuno",False))
+            diabetes   = st.toggle("Diabetes Mellitus", value=d.get("diabetes",False)) # NUEVO
             st.markdown('</div>', unsafe_allow_html=True)
         with col_r:
             st.markdown('<div class="glass-card">', unsafe_allow_html=True)
@@ -574,6 +578,7 @@ elif st.session_state.pantalla == "triage":
             st.markdown('<span class="section-label">04 · Comorbilidades</span>', unsafe_allow_html=True)
             neumopatia_n = st.toggle("Neumopatía crónica (EPOC/Asma/Fibrosis)", value=d.get("neumopatia",False))
             inmuno_n     = st.toggle("Inmunocompromiso", value=d.get("inmuno",False))
+            diabetes   = st.toggle("Diabetes Mellitus", value=d.get("diabetes",False)) # NUEVO
             st.markdown('</div>', unsafe_allow_html=True)
 
     # ══ FORMULARIO OMA ════════════════════════════
@@ -609,6 +614,7 @@ elif st.session_state.pantalla == "triage":
             otalgia_int  = st.toggle("Otalgia intensa (EVA >7)", value=d.get("otalgia_intensa",False))
             bilateral    = st.toggle("OMA bilateral",        value=d.get("bilateral",False))
             inmuno_oma   = st.toggle("Inmunocompromiso",     value=d.get("inmuno",False))
+            diabetes   = st.toggle("Diabetes Mellitus", value=d.get("diabetes",False)) # NUEVO
             episodios    = st.number_input("Episodios previos (últimos 6 meses)", 0, 10, d.get("episodios_previos",0))
             st.markdown('</div>', unsafe_allow_html=True)
 
@@ -632,6 +638,7 @@ elif st.session_state.pantalla == "triage":
             st.markdown('<span class="section-label">04 · Comorbilidades</span>', unsafe_allow_html=True)
             inmuno_sin = st.toggle("Inmunocompromiso",              value=d.get("inmuno",False))
             asma       = st.toggle("Asma / Rinitis alérgica",       value=d.get("asma",False))
+            diabetes_s = st.toggle("Diabetes Mellitus", value=d.get("diabetes",False)) # NUEVO
             st.markdown('</div>', unsafe_allow_html=True)
         with col_r:
             st.markdown('<div class="glass-card">', unsafe_allow_html=True)
@@ -671,7 +678,7 @@ elif st.session_state.pantalla == "triage":
                         adenopatia_cervical_anterior=adenopatia, conjuntivitis=conjuntivitis,
                         mialgias_severas=mialgias, disfonia=disfonia, rinorrea=rinorrea,
                         tos=tos, exantema=exantema, nauseas_vomito=nauseas,
-                        neumopatia_cronica=neumopatia, inmunocompromiso=inmuno)
+                        neumopatia_cronica=neumopatia, inmunocompromiso=inmuno, diabetes_mellitus=diabetes)
                     resultado = evaluar_paciente(p)
                     score_display = p.calcular_score_centor()
                     virales_display = p.contar_signos_virales()
@@ -682,7 +689,7 @@ elif st.session_state.pantalla == "triage":
                         hipotension=hipotension, saturacion_oxigeno=sat_input,
                         neumopatia_cronica=neumopatia_n, inmunocompromiso=inmuno_n,
                         fiebre=fiebre_n, tos_productiva=tos_prod,
-                        dolor_toracico=dolor_tor, escalofrios=escalofrios)
+                        dolor_toracico=dolor_tor, escalofrios=escalofrios, diabetes_mellitus=diabetes_n) 
                     resultado = evaluar_neumonia(p)
                     score_display = p.calcular_curb65()
                     virales_display = 0
@@ -694,7 +701,7 @@ elif st.session_state.pantalla == "triage":
                         otalgia=otalgia, fiebre_mayor_38=fiebre_oma,
                         hiperemia_timpanica=hiperemia, fiebre_mayor_39=fiebre_39,
                         otalgia_intensa=otalgia_int, bilateral=bilateral,
-                        inmunocompromiso=inmuno_oma, episodios_previos=int(episodios))
+                        inmunocompromiso=inmuno_oma, episodios_previos=int(episodios), diabetes_mellitus=diabetes_o)
                     resultado = evaluar_oma(p)
                     score_display = p.criterios_diagnosticos()
                     virales_display = 0
@@ -707,7 +714,7 @@ elif st.session_state.pantalla == "triage":
                         fiebre_mayor_38=fiebre_sin, dolor_facial_unilateral=dolor_uni,
                         fiebre_mayor_39=fiebre_39_sin, edema_periorbitario=edema_periorbit,
                         rigidez_nucal=rigidez_nucal, cefalea_intensa=cefalea_intensa,
-                        inmunocompromiso=inmuno_sin, asma_rinitis_alergica=asma)
+                        inmunocompromiso=inmuno_sin, asma_rinitis_alergica=asma, diabetes_mellitus=diabetes_s)
                     resultado = evaluar_sinusitis(p)
                     score_display = dias_input  # días como indicador
                     virales_display = 0
@@ -943,6 +950,25 @@ elif st.session_state.pantalla == "resultados":
     trat_html = tratamiento.replace("\n","<br>")
     pcol = c["pcol"]
 
+    # ── LÓGICA DE ALERTA DIABETES ──────────────────────
+    banner_diabetes = ""
+    if getattr(paciente, "diabetes_mellitus", False):
+        if tipo == "viral":
+            mensaje_dm = "Vigilancia estrecha: Infecciones virales leves pueden detonar hiperglucemia o cetoacidosis. Recomendar al paciente monitoreo estricto de glucosa en casa y no suspender insulina."
+        else:
+            mensaje_dm = "Alto riesgo de complicaciones invasivas o daño renal. Considerar ajuste de función renal (TFG) para la dosis del antibiótico indicado."
+            
+        # SIN ESPACIOS AL INICIO PARA QUE STREAMLIT NO LO HAGA CÓDIGO
+        banner_diabetes = f"""
+<div style="background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.3); border-radius:14px; padding:16px 20px; margin-bottom:24px; display:flex; align-items:flex-start; gap:16px; animation:fade-up 0.5s 0.2s both;">
+<span style="font-size:1.6rem; line-height:1;">🔶</span>
+<div>
+<div style="font-size:0.65rem; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:#F59E0B; margin-bottom:4px;">Alerta Endocrinológica · Riesgo Ajustado</div>
+<div style="font-size:0.85rem; color:#F0FDFA; line-height:1.5;">{mensaje_dm}</div>
+</div>
+</div>
+"""
+
     # Nombre de patología para mostrar
     NOMBRES_PAT = {"faringitis":"Faringitis","neumonia":"Neumonía CAP","oma":"Otitis Media Aguda","sinusitis":"Sinusitis Aguda"}
     nombre_pat_display = NOMBRES_PAT.get(patologia,"IRA")
@@ -1087,6 +1113,9 @@ elif st.session_state.pantalla == "resultados":
       </div>
     </div>
   </div>
+
+  {banner_diabetes}
+
   <div class="cards-row">
     <div class="info-card">
       <div class="info-card-label">{score_label}</div>
@@ -1112,6 +1141,46 @@ elif st.session_state.pantalla == "resultados":
 </div>
 """, unsafe_allow_html=True)
 
+    # ── PANEL DE EXPLICABILIDAD "CAJA DE CRISTAL" ──────────────────────
+    razonamiento = resultado.get("razonamiento", None)
+    if razonamiento:
+        pasos = razonamiento.get("pasos", [])
+
+        # Construir HTML de pasos SIN espacios duros
+        pasos_html = ""
+        for paso in pasos:
+            items_html = ""
+            for item in paso["items"]:
+                pts_badge = f'<span style="font-size:0.58rem;font-weight:700;color:{item["color"]};border:1px solid {item["color"]}44;border-radius:4px;padding:1px 6px;background:{item["color"]}11;margin-left:6px;">{item["pts"]}</span>' if item.get("pts","") else ""
+                items_html += f'<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);"><div style="display:flex;align-items:center;gap:8px;"><div style="width:6px;height:6px;border-radius:50%;background:{item["color"]};flex-shrink:0;"></div><span style="font-size:0.78rem;color:rgba(240,253,250,0.6);">{item["label"]}</span></div><div style="display:flex;align-items:center;gap:4px;"><span style="font-size:0.72rem;font-weight:600;color:{item["color"]};">{item["status"]}</span>{pts_badge}</div></div>'
+
+            resultado_row = f'<div style="margin-top:10px;padding:8px 12px;background:rgba(255,255,255,0.03);border-radius:8px;border-left:3px solid {paso["resultado_color"]};"><span style="font-size:0.72rem;font-weight:700;color:{paso["resultado_color"]};letter-spacing:1px;">{paso["resultado"]}</span></div>' if paso.get("resultado") else ""
+
+            pasos_html += f'<div style="margin-bottom:16px;padding:14px 16px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;"><div style="font-size:0.62rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#14B8A6;margin-bottom:10px;">{paso["titulo"]}</div>{items_html}{resultado_row}</div>'
+
+        st.markdown(f"""
+        <style>
+        details.glass-box {{ background:rgba(255,255,255,0.02); border:1px solid rgba(20,184,166,0.2); border-radius:14px; margin-bottom: 20px; }}
+        details.glass-box summary {{ display:flex; align-items:center; justify-content:space-between; padding:16px 20px; cursor:pointer; list-style:none; transition:background 0.2s; border-radius:14px; }}
+        details.glass-box summary::-webkit-details-marker {{ display:none; }}
+        details.glass-box summary:hover {{ background:rgba(20,184,166,0.05); }}
+        details.glass-box .chevron {{ transition:transform 0.3s; font-size:0.8rem; color:#14B8A6; }}
+        details.glass-box[open] .chevron {{ transform:rotate(180deg); }}
+        details.glass-box[open] summary {{ border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom: 1px solid rgba(255,255,255,0.05); }}
+        .exp-body-content {{ padding: 16px 20px; animation:fadeIn 0.4s ease; }}
+        @keyframes fadeIn{{from{{opacity:0;transform:translateY(-4px)}}to{{opacity:1;transform:translateY(0)}}}}
+        </style>
+        <details class="glass-box">
+        <summary>
+        <div style="display:flex;align-items:center;gap:14px;"><span style="font-size:1.1rem;">&#128269;</span><div><div style="font-size:0.62rem;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#14B8A6;margin-bottom:2px;">Caja de Cristal · Explicabilidad de la Decisión</div><div style="font-size:0.82rem;color:rgba(240,253,250,0.6);">Motor: {razonamiento["motor"]} &nbsp;&#183;&nbsp; Guia: {razonamiento["guia"]} &nbsp;&#183;&nbsp; Respuesta: {razonamiento["ms"]}ms</div></div></div><div style="display:flex;align-items:center;gap:10px;flex-shrink:0;"><span style="font-size:0.58rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#22C55E;border:1px solid #22C55E44;border-radius:99px;padding:3px 10px;background:#22C55E11;">&#10003; Determinista</span><span class="chevron">&#9660;</span></div>
+        </summary>
+        <div class="exp-body-content">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;"><div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:10px 14px;"><div style="font-size:0.55rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(240,253,250,0.3);margin-bottom:4px;">Motor</div><div style="font-size:0.78rem;color:#F0FDFA;font-weight:600;">{razonamiento["motor"]}</div></div><div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:10px 14px;"><div style="font-size:0.55rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(240,253,250,0.3);margin-bottom:4px;">DOI</div><div style="font-size:0.75rem;color:#14B8A6;font-weight:600;">{razonamiento["doi"]}</div></div><div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:10px 14px;"><div style="font-size:0.55rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(240,253,250,0.3);margin-bottom:4px;">Tiempo de respuesta</div><div style="font-size:0.78rem;color:#F0FDFA;font-weight:600;">{razonamiento["ms"]} ms</div></div></div>
+        {pasos_html}
+        <div style="margin-top:4px;padding:10px 14px;background:rgba(34,197,94,0.05);border:1px solid rgba(34,197,94,0.15);border-radius:10px;"><span style="font-size:0.62rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#22C55E;margin-right:8px;">&#10003; Sistema Determinista</span><span style="font-size:0.72rem;color:rgba(240,253,250,0.5);">{razonamiento["deterministic_note"]}</span></div><div style="margin-top:10px;padding:10px 14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px;"><div style="font-size:0.55rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(240,253,250,0.3);margin-bottom:5px;">Referencia Academica Completa (PubMed)</div><div style="font-size:0.75rem;color:rgba(240,253,250,0.5);line-height:1.5;font-style:italic;">{razonamiento["ref_completa"]}</div></div>
+        </div>
+        </details>
+        """, unsafe_allow_html=True)
     # ── LÍNEA DE TIEMPO "SIN TRATAMIENTO" ─────────────────────────────
     TIMELINES = {
         "faringitis": {
