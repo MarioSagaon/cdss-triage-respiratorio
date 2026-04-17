@@ -419,5 +419,9 @@ def generar_json_estructurado(paciente, resultado: dict, decision_info: dict, me
                 else "PENDING_EVALUATION"
             ),
             "region_amr_context": "Noreste MX — high prevalence of ABX-resistant S. pneumoniae (~35%)",
+            "antibiotic_timeout_48h_prescribed": tipo in ("bacteriana", "urgencia"),
+            "timeout_followup_required": tipo in ("bacteriana", "urgencia") or (
+                tipo == "gris" and patologia == "oma"
+            ),
         },
     }
