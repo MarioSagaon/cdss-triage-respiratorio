@@ -24,7 +24,8 @@ class PacienteIRA:
     neumopatia_cronica: bool
     inmunocompromiso: bool
     diabetes_mellitus: bool = False  # NUEVO CAMPO
-    
+    poc_strep: str = "No realizado"
+    poc_viral: str = "No realizado"
     def calcular_score_centor(self) -> int:
         score = 0
         if self.fiebre_mayor_38:            score += 1

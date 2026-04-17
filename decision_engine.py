@@ -120,6 +120,23 @@ def evaluar_paciente(paciente: PacienteIRA) -> dict:
         "ref_completa": "McIsaac WJ, Kellner JD, Aufricht P, et al. Empirical validation of guidelines for the management of pharyngitis in children and adults. JAMA. 2004;291(13):1589-1595. doi:10.1001/jama.291.13.1589",
     }
 
+# ▼▼▼ MEGAZORD 4: LÓGICA DE POINT-OF-CARE (POC) ▼▼▼
+    # La prueba de laboratorio tiene mayor jerarquía que el score clínico
+    if paciente.poc_strep == "Positivo":
+        razonamiento["pasos"].append({"titulo": "PASO 4 — Integración POC", "items": [{"label": "Test Rápido Estreptococo A", "status": "POSITIVO", "color": "#EF4444", "pts": "Definitivo"}], "resultado": "BACTERIANA CONFIRMADA POR LAB", "resultado_color": "#22C55E"})
+        return {"tipo": "bacteriana", "diagnostico": "🧫 CONFIRMACIÓN POC: Estreptococo A positivo. Requiere cobertura antibiótica.", "tratamiento": GUIAS_FARINGITIS["bacteriana"], "razonamiento": razonamiento}
+    
+    if paciente.poc_strep == "Negativo" and score >= 4:
+        razonamiento["pasos"].append({"titulo": "PASO 4 — Stewardship Activo (POC)", "items": [{"label": "Test Rápido Estreptococo A", "status": "NEGATIVO", "color": "#22C55E", "pts": "Override"}], "resultado": "SCORE ANULADO POR LAB", "resultado_color": "#3B82F6"})
+        return {"tipo": "viral", "diagnostico": "🛡️ STEWARDSHIP: Clínica sugestiva (McIsaac Alto) pero RADT Negativo. Se EVITA el uso de antibiótico empírico.", "tratamiento": GUIAS_FARINGITIS["viral"], "razonamiento": razonamiento}
+
+    if paciente.poc_viral in ["Influenza A/B", "COVID-19", "VSR"]:
+        razonamiento["pasos"].append({"titulo": "PASO 4 — Panel Viral (POC)", "items": [{"label": f"Detección {paciente.poc_viral}", "status": "POSITIVO", "color": "#A78BFA", "pts": "Aislamiento"}], "resultado": "PROTOCOLO EPIDEMIOLÓGICO ACTIVO", "resultado_color": "#A78BFA"})
+        tx_extra = "\n• AISLAMIENTO: Iniciar precauciones por gotas/contacto."
+        if paciente.poc_viral == "Influenza A/B":
+            tx_extra += "\n• Oseltamivir 75mg c/12h por 5 días (si <48h de inicio o paciente de riesgo)."
+        return {"tipo": "viral", "diagnostico": f"☣️ ALERTA EPIDEMIOLÓGICA: Infección por {paciente.poc_viral} confirmada por laboratorio.", "tratamiento": GUIAS_FARINGITIS["viral"] + tx_extra, "razonamiento": razonamiento}
+    # ▲▲▲ FIN LÓGICA POC ▲▲▲
     if paciente.tiene_banderas_rojas():
         return {"tipo":"urgencia", "diagnostico":"🚨 ALERTA: Criterios de urgencia (Hipoxia o Taquipnea).", "tratamiento":GUIAS_FARINGITIS["urgencia"], "razonamiento": razonamiento}
     if paciente.tiene_riesgo_elevado():
