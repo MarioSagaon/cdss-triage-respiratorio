@@ -1309,7 +1309,12 @@ elif st.session_state.pantalla == "triage":
 
 
 # ══════════════════════════════════════════
-# PANTALLA 4 — RESULTADOS
+
+# ══════════════════════════════════════════
+# PANTALLA 4 — RESULTADOS  (rediseñada)
+# Jerarquía: Hero → Scores → Guía →
+#   Caja Cristal → Timeline → AMR →
+#   Ficha Paciente → Controles
 # ══════════════════════════════════════════
 elif st.session_state.pantalla == "resultados":
 
@@ -1320,52 +1325,52 @@ elif st.session_state.pantalla == "resultados":
     except ImportError:
         PDF_DISPONIBLE = False
 
-    resultado   = st.session_state.resultado_completo
-    nombre_pac  = st.session_state.get("nombre_paciente","Paciente")
-    paciente    = st.session_state.get("paciente_obj", None)
-    patologia   = st.session_state.get("patologia","faringitis")
-    tipo        = resultado.get("tipo","gris")
-    diagnostico = resultado["diagnostico"]
-    tratamiento = resultado["tratamiento"]
+    resultado     = st.session_state.resultado_completo
+    nombre_pac    = st.session_state.get("nombre_paciente", "Paciente")
+    paciente      = st.session_state.get("paciente_obj", None)
+    patologia     = st.session_state.get("patologia", "faringitis")
+    tipo          = resultado.get("tipo", "gris")
+    diagnostico   = resultado["diagnostico"]
+    tratamiento   = resultado["tratamiento"]
 
     ahora         = datetime.now()
     fecha_str     = ahora.strftime("%d %b %Y").upper()
     hora_str      = ahora.strftime("%H:%M")
-    decision_info = st.session_state.decision_info  # RECUPERAMOS EL HASH EXACTO CREADO EN EL PASO ANTERIOR
+    decision_info = st.session_state.decision_info
     folio         = decision_info["decision_id"]
 
-    # Score labels por patología
+    # ── Score labels ──────────────────────────────────────────────
     if patologia == "faringitis" and paciente:
-        score_val = paciente.calcular_score_centor()
+        score_val   = paciente.calcular_score_centor()
         score_label = "Score McIsaac"
-        score_max = 5
-        viral_val = paciente.contar_signos_virales()
+        score_max   = 5
+        viral_val   = paciente.contar_signos_virales()
         viral_label = "Signos Virales"
-        viral_max = 7
+        viral_max   = 7
     elif patologia == "neumonia" and paciente:
-        score_val = paciente.calcular_curb65()
+        score_val   = paciente.calcular_curb65()
         score_label = "CURB-65"
-        score_max = 5
-        viral_val = score_val
+        score_max   = 5
+        viral_val   = score_val
         viral_label = "Severidad"
-        viral_max = 5
+        viral_max   = 5
     elif patologia == "oma" and paciente:
-        score_val = paciente.criterios_diagnosticos()
+        score_val   = paciente.criterios_diagnosticos()
         score_label = "Criterios Dx"
-        score_max = 3
-        viral_val = 1 if paciente.es_grave() else 0
+        score_max   = 3
+        viral_val   = 1 if paciente.es_grave() else 0
         viral_label = "Gravedad"
-        viral_max = 1
+        viral_max   = 1
     else:
-        score_val = 0
+        score_val   = 0
         score_label = "Score"
-        score_max = 5
-        viral_val = 0
+        score_max   = 5
+        viral_val   = 0
         viral_label = "Indicador"
-        viral_max = 5
+        viral_max   = 5
 
-    score_pct  = min(max(score_val/score_max,0),1)*100 if score_max>0 else 0
-    viral_pct  = min(max(viral_val/viral_max,0),1)*100 if viral_max>0 else 0
+    score_pct  = min(max(score_val / score_max, 0), 1) * 100 if score_max > 0 else 0
+    viral_pct  = min(max(viral_val / viral_max, 0), 1) * 100 if viral_max > 0 else 0
     score_info = {"val": score_val, "max": score_max, "label": score_label}
 
     CONFIGS = {
@@ -1376,183 +1381,188 @@ elif st.session_state.pantalla == "resultados":
     }
     c = CONFIGS.get(tipo, CONFIGS["gris"])
 
-    if score_val/score_max >= 0.7 if score_max>0 else False: gauge_color="#22C55E"
-    elif score_val/score_max >= 0.4 if score_max>0 else False: gauge_color="#F59E0B"
-    else: gauge_color="#3B82F6"
+    if score_max > 0 and score_val / score_max >= 0.7:
+        gauge_color = "#22C55E"
+    elif score_max > 0 and score_val / score_max >= 0.4:
+        gauge_color = "#F59E0B"
+    else:
+        gauge_color = "#3B82F6"
 
-    diag_html = diagnostico.replace("\n","<br>")
-    trat_html = tratamiento.replace("\n","<br>")
+    diag_html = diagnostico.replace("\n", "<br>")
+    trat_html = tratamiento.replace("\n", "<br>")
     pcol = c["pcol"]
 
-    # ── LÓGICA DE ALERTA DIABETES ──────────────────────
+    # Alerta diabetes
     banner_diabetes = ""
     if getattr(paciente, "diabetes_mellitus", False):
         if tipo == "viral":
-            mensaje_dm = "Vigilancia estrecha: Infecciones virales leves pueden detonar hiperglucemia o cetoacidosis. Recomendar al paciente monitoreo estricto de glucosa en casa y no suspender insulina."
+            msg_dm = "Vigilancia estrecha: Infecciones virales pueden detonar hiperglucemia. Recomendar monitoreo de glucosa y no suspender insulina."
         else:
-            mensaje_dm = "Alto riesgo de complicaciones invasivas o daño renal. Considerar ajuste de función renal (TFG) para la dosis del antibiótico indicado."
-            
-        # SIN ESPACIOS AL INICIO PARA QUE STREAMLIT NO LO HAGA CÓDIGO
+            msg_dm = "Alto riesgo de complicaciones. Considerar ajuste de dosis según función renal (TFG) para el antibiótico indicado."
         banner_diabetes = f"""
-<div style="background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.3); border-radius:14px; padding:16px 20px; margin-bottom:24px; display:flex; align-items:flex-start; gap:16px; animation:fade-up 0.5s 0.2s both;">
-<span style="font-size:1.6rem; line-height:1;">🔶</span>
-<div>
-<div style="font-size:0.65rem; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:#F59E0B; margin-bottom:4px;">Alerta Endocrinológica · Riesgo Ajustado</div>
-<div style="font-size:0.85rem; color:#F0FDFA; line-height:1.5;">{mensaje_dm}</div>
-</div>
-</div>
-"""
+<div style="background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.28);
+    border-radius:12px;padding:14px 18px;margin-bottom:20px;
+    display:flex;align-items:flex-start;gap:14px;">
+  <span style="font-size:1.4rem;line-height:1;flex-shrink:0;">🔶</span>
+  <div>
+    <div style="font-size:0.6rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+        color:#F59E0B;margin-bottom:3px;">Alerta Endocrinológica · Riesgo Ajustado</div>
+    <div style="font-size:0.84rem;color:#F0FDFA;line-height:1.5;">{msg_dm}</div>
+  </div>
+</div>"""
 
-    # Nombre de patología para mostrar
     NOMBRES_PAT = {"faringitis":"Faringitis","neumonia":"Neumonía CAP","oma":"Otitis Media Aguda","sinusitis":"Sinusitis Aguda"}
-    nombre_pat_display = NOMBRES_PAT.get(patologia,"IRA")
-    metadatos = {
-        "patologia": patologia,
-        "nombre_paciente": nombre_pac,
-        "nombre_pat_display": nombre_pat_display,
-        "score_info": score_info,
-    }
+    nombre_pat_display = NOMBRES_PAT.get(patologia, "IRA")
+    metadatos = {"patologia": patologia, "nombre_paciente": nombre_pac,
+                 "nombre_pat_display": nombre_pat_display, "score_info": score_info}
 
+    # ══════════════════════════════════════════════════════════════
+    # BLOQUE 1 — META + PACIENTE + HERO + SCORES + GUÍA
+    # Todo en un solo st.markdown para evitar flashes y doble render
+    # ══════════════════════════════════════════════════════════════
     st.markdown(f"""
 <style>
-.res-page {{ max-width:980px; margin:0 auto; padding:44px 28px 40px; }}
-.res-meta-bar {{ display:flex; justify-content:space-between; align-items:center; margin-bottom:22px; animation:fade-up 0.5s 0.1s both; }}
-.meta-folio {{ font-size:0.6rem; font-weight:700; letter-spacing:3px; color:var(--teal-light); text-transform:uppercase; }}
-.meta-datetime {{ font-family:'DM Serif Display',serif; font-size:1.5rem; color:var(--text); letter-spacing:-0.5px; margin-top:2px; }}
-.meta-right {{ text-align:right; font-size:0.75rem; color:var(--muted); line-height:1.7; }}
-.patient-bar {{ display:flex; align-items:center; justify-content:space-between; background:rgba(13,148,136,0.08); border:1px solid rgba(13,148,136,0.2); border-radius:14px; padding:16px 24px; margin-bottom:22px; animation:fade-up 0.5s 0.15s both; }}
-.patient-label {{ font-size:0.6rem; font-weight:700; letter-spacing:3px; text-transform:uppercase; color:var(--teal-light); margin-bottom:4px; }}
-.patient-name {{ font-family:'DM Serif Display',serif; font-size:1.7rem; color:var(--text); line-height:1; }}
-.patient-folio {{ font-size:0.72rem; color:var(--muted); letter-spacing:1px; text-align:right; line-height:1.6; }}
-.res-hero {{ position:relative; border:1px solid {c["accent"]}44; border-radius:28px; overflow:hidden; margin-bottom:24px; box-shadow:0 0 80px {c["glow"]}; animation:card-in 0.7s cubic-bezier(0.23,1,0.32,1) both; }}
-.res-hero-bg {{ position:absolute; inset:0; z-index:0; background:radial-gradient(ellipse at 20% 50%,{c["accent"]}18 0%,transparent 60%),radial-gradient(ellipse at 80% 50%,{c["accent"]}0c 0%,transparent 60%); animation:bg-shift 5s ease-in-out infinite alternate; }}
-@keyframes bg-shift {{ from {{ opacity:0.5; }} to {{ opacity:1.0; }} }}
-.res-hero-inner {{ position:relative; z-index:1; display:flex; align-items:center; gap:32px; padding:36px 40px; }}
-.hero-icon {{ font-size:5rem; line-height:1; flex-shrink:0; animation:icon-pop 0.6s 0.4s cubic-bezier(0.34,1.56,0.64,1) both; filter:drop-shadow(0 0 16px {c["accent"]}); }}
-@keyframes icon-pop {{ from {{ opacity:0; transform:scale(0.2) rotate(-20deg); }} to {{ opacity:1; transform:scale(1) rotate(0deg); }} }}
-.hero-tag {{ display:inline-block; font-size:0.6rem; font-weight:700; letter-spacing:4px; text-transform:uppercase; color:{c["accent"]}; border:1px solid {c["accent"]}55; border-radius:99px; padding:4px 14px; margin-bottom:12px; background:{c["bg"]}; }}
-.hero-label {{ font-family:'DM Serif Display',serif; font-size:clamp(1.5rem,3vw,2.2rem); color:var(--text); font-weight:400; letter-spacing:-0.5px; line-height:1.2; margin-bottom:10px; }}
-.hero-diag {{ font-size:0.92rem; color:var(--muted); line-height:1.65; }}
-.cards-row {{ display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:22px; animation:fade-up 0.5s 0.3s both; }}
-.info-card {{ background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:24px; }}
-.info-card-label {{ font-size:0.6rem; font-weight:700; letter-spacing:3px; text-transform:uppercase; color:var(--muted); margin-bottom:16px; }}
-.gauge-number {{ font-family:'DM Serif Display',serif; font-size:3.2rem; line-height:1; margin-bottom:4px; }}
-.gauge-sub {{ font-size:0.72rem; color:var(--muted); margin-bottom:16px; }}
-.gauge-bar-bg {{ width:100%; height:8px; background:rgba(255,255,255,0.08); border-radius:99px; overflow:hidden; margin-bottom:8px; }}
-.gauge-bar-fill {{ height:100%; border-radius:99px; background:linear-gradient(to right,{gauge_color}88,{gauge_color}); animation:fill-bar 1.2s 0.6s cubic-bezier(0.23,1,0.32,1) both; }}
-@keyframes fill-bar {{ from {{ width:0%; }} to {{ width:{score_pct}%; }} }}
-.viral-bar-fill {{ height:100%; border-radius:99px; background:linear-gradient(to right,#3B82F688,#3B82F6); animation:fill-viral 1.2s 0.8s cubic-bezier(0.23,1,0.32,1) both; }}
-@keyframes fill-viral {{ from {{ width:0%; }} to {{ width:{viral_pct}%; }} }}
-.gauge-ticks {{ display:flex; justify-content:space-between; font-size:0.58rem; color:var(--muted); margin-top:4px; }}
-.tx-card {{ background:{c["bg"]}; border:1px solid {c["accent"]}33; border-radius:18px; padding:26px; margin-bottom:22px; animation:fade-up 0.5s 0.35s both; }}
-.tx-label {{ font-size:0.6rem; font-weight:700; letter-spacing:3px; text-transform:uppercase; color:{c["accent"]}; margin-bottom:14px; }}
-.tx-body {{ font-size:0.95rem; color:var(--text); line-height:1.8; }}
-.fund-card {{ background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:22px 24px; margin-bottom:22px; animation:fade-up 0.5s 0.4s both; }}
-.fund-label {{ font-size:0.6rem; font-weight:700; letter-spacing:3px; text-transform:uppercase; color:var(--muted); margin-bottom:10px; }}
-.fund-body {{ font-size:0.88rem; color:var(--muted); line-height:1.7; }}
-#particles-canvas {{ position:fixed; inset:0; pointer-events:none; z-index:999; }}
-@keyframes card-in {{ from {{ opacity:0; transform:translateY(32px) scale(0.98); }} to {{ opacity:1; transform:translateY(0) scale(1); }} }}
-@keyframes fade-up {{ from {{ opacity:0; transform:translateY(20px); }} to {{ opacity:1; transform:translateY(0); }} }}
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap');
+.res-page      {{ max-width:980px; margin:0 auto; padding:32px 28px 8px; }}
+
+/* ── Meta bar ── */
+.res-meta      {{ display:flex; justify-content:space-between; align-items:center;
+                  margin-bottom:16px; padding:10px 16px;
+                  background:rgba(255,255,255,0.02); border-radius:10px;
+                  border:1px solid rgba(255,255,255,0.06); }}
+.meta-left     {{ font-size:0.7rem; color:var(--teal-light); font-weight:700;
+                  letter-spacing:2px; text-transform:uppercase; }}
+.meta-left span{{ font-family:monospace; color:rgba(240,253,250,0.5);
+                  font-size:0.62rem; margin-left:10px; font-weight:400; }}
+.meta-right    {{ font-size:0.62rem; color:rgba(240,253,250,0.3);
+                  text-align:right; line-height:1.6; font-family:monospace; }}
+
+/* ── Patient bar ── */
+.pat-bar       {{ display:flex; justify-content:space-between; align-items:center;
+                  background:rgba(13,148,136,0.07); border:1px solid rgba(13,148,136,0.18);
+                  border-radius:14px; padding:14px 22px; margin-bottom:18px; }}
+.pat-label     {{ font-size:0.58rem; font-weight:700; letter-spacing:3px;
+                  text-transform:uppercase; color:var(--teal-light); margin-bottom:3px; }}
+.pat-name      {{ font-family:'DM Serif Display',serif; font-size:1.65rem;
+                  color:#F0FDFA; line-height:1; }}
+.pat-folio     {{ font-size:0.65rem; color:rgba(240,253,250,0.4); text-align:right; line-height:1.7; }}
+
+/* ── Hero card ── */
+.hero          {{ position:relative; border:1px solid {c["accent"]}44; border-radius:24px;
+                  overflow:hidden; margin-bottom:18px;
+                  box-shadow:0 0 60px {c["glow"]}; animation:card-in 0.65s cubic-bezier(0.23,1,0.32,1) both; }}
+.hero-bg       {{ position:absolute; inset:0; z-index:0;
+                  background:radial-gradient(ellipse at 18% 50%,{c["accent"]}16 0%,transparent 55%),
+                              radial-gradient(ellipse at 82% 50%,{c["accent"]}0c 0%,transparent 55%);
+                  animation:bg-pulse 5s ease-in-out infinite alternate; }}
+@keyframes bg-pulse{{ from{{opacity:.5}} to{{opacity:1}} }}
+.hero-inner    {{ position:relative; z-index:1; display:flex; align-items:center;
+                  gap:28px; padding:30px 36px; }}
+.hero-emoji    {{ font-size:4.4rem; line-height:1; flex-shrink:0;
+                  filter:drop-shadow(0 0 14px {c["accent"]});
+                  animation:icon-pop 0.55s 0.35s cubic-bezier(0.34,1.56,0.64,1) both; }}
+@keyframes icon-pop{{ from{{opacity:0;transform:scale(0.2) rotate(-20deg)}} to{{opacity:1;transform:scale(1) rotate(0deg)}} }}
+.hero-tag      {{ display:inline-block; font-size:0.58rem; font-weight:700;
+                  letter-spacing:4px; text-transform:uppercase; color:{c["accent"]};
+                  border:1px solid {c["accent"]}55; border-radius:99px;
+                  padding:3px 13px; margin-bottom:10px; background:{c["bg"]}; }}
+.hero-label    {{ font-family:'DM Serif Display',serif;
+                  font-size:clamp(1.4rem,2.8vw,2.1rem); color:#F0FDFA;
+                  font-weight:400; letter-spacing:-0.3px; line-height:1.2; margin-bottom:8px; }}
+.hero-diag     {{ font-size:0.9rem; color:rgba(240,253,250,0.55); line-height:1.6; }}
+
+/* ── Score cards ── */
+.scores-row    {{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:18px; }}
+.score-card    {{ background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);
+                  border-radius:16px; padding:20px 22px; }}
+.score-lbl     {{ font-size:0.58rem; font-weight:700; letter-spacing:3px;
+                  text-transform:uppercase; color:rgba(240,253,250,0.35); margin-bottom:12px; }}
+.score-num     {{ font-family:'DM Serif Display',serif; font-size:3rem; line-height:1; margin-bottom:6px; }}
+.bar-bg        {{ width:100%; height:7px; background:rgba(255,255,255,0.07);
+                  border-radius:99px; overflow:hidden; margin-bottom:6px; }}
+.bar-fill-s    {{ height:100%; border-radius:99px;
+                  background:linear-gradient(to right,{gauge_color}88,{gauge_color});
+                  animation:fill-s 1.1s 0.5s cubic-bezier(0.23,1,0.32,1) both; }}
+@keyframes fill-s{{ from{{width:0%}} to{{width:{score_pct}%}} }}
+.bar-fill-v    {{ height:100%; border-radius:99px;
+                  background:linear-gradient(to right,#3B82F688,#3B82F6);
+                  animation:fill-v 1.1s 0.7s cubic-bezier(0.23,1,0.32,1) both; }}
+@keyframes fill-v{{ from{{width:0%}} to{{width:{viral_pct}%}} }}
+.bar-ticks     {{ display:flex; justify-content:space-between;
+                  font-size:0.55rem; color:rgba(240,253,250,0.3); }}
+
+/* ── Therapeutic guide ── */
+.tx-card       {{ background:{c["bg"]}; border:1px solid {c["accent"]}33;
+                  border-radius:16px; padding:22px 24px; margin-bottom:18px; }}
+.tx-eyebrow    {{ font-size:0.58rem; font-weight:700; letter-spacing:3px;
+                  text-transform:uppercase; color:{c["accent"]}; margin-bottom:12px; }}
+.tx-body       {{ font-size:0.93rem; color:#F0FDFA; line-height:1.8; }}
+
+/* ── Reference pill ── */
+.ref-pill      {{ display:inline-flex; align-items:center; gap:8px;
+                  background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);
+                  border-radius:99px; padding:6px 16px; margin-bottom:18px;
+                  font-size:0.72rem; color:rgba(240,253,250,0.4); }}
+.ref-pill b    {{ color:rgba(240,253,250,0.65); }}
+
+/* ── Particles ── */
+#res-canvas    {{ position:fixed; inset:0; pointer-events:none; z-index:999; }}
+
+/* ── Animations ── */
+@keyframes card-in{{ from{{opacity:0;transform:translateY(24px) scale(.98)}} to{{opacity:1;transform:translateY(0) scale(1)}} }}
+@keyframes fade-up{{ from{{opacity:0;transform:translateY(16px)}}          to{{opacity:1;transform:translateY(0)}} }}
 </style>
 
-<canvas id="particles-canvas"></canvas>
+<canvas id="res-canvas"></canvas>
 <script>
-(function() {{
-    const canvas=document.getElementById('particles-canvas'); if(!canvas)return;
-    const ctx=canvas.getContext('2d');
-    canvas.width=window.innerWidth; canvas.height=window.innerHeight;
-    const particles=[]; const color='{pcol}';
-    const isViral = '{tipo}' === 'viral';
-
-    // Confetti shapes for viral
-    const confettiColors = ['#22C55E','#3B82F6','#14B8A6','#A78BFA','#F59E0B','#EC4899'];
-    function spawnConfetti(){{
-        particles.push({{
-            x: Math.random()*canvas.width,
-            y: -10,
-            vx: (Math.random()-0.5)*3,
-            vy: Math.random()*3+1,
-            r: Math.random()*6+3,
-            color: confettiColors[Math.floor(Math.random()*confettiColors.length)],
-            rot: Math.random()*Math.PI*2,
-            vrot: (Math.random()-0.5)*0.15,
-            shape: Math.random()>0.5?'rect':'circle',
-            life: Math.random()*120+100,
-            age: 0,
-            isConfetti: true
-        }});
-    }}
-
-    function spawn(){{
-        particles.push({{x:Math.random()*canvas.width,y:canvas.height+10,
-            vx:(Math.random()-0.5)*1.2,vy:-(Math.random()*2.2+0.8),
-            r:Math.random()*5+2,life:Math.random()*100+80,age:0,isConfetti:false}});
-    }}
-
-    function draw(){{
-        ctx.clearRect(0,0,canvas.width,canvas.height);
-        for(let i=particles.length-1;i>=0;i--){{
-            const p=particles[i];
-            p.x+=p.vx; p.y+=p.vy; p.age++;
-            if(p.age>=p.life){{particles.splice(i,1);continue;}}
-            const alpha=(1-p.age/p.life)*0.75;
-            ctx.save();
-            ctx.globalAlpha=alpha;
-            if(p.isConfetti){{
-                p.rot+=p.vrot;
-                p.vy+=0.04; // gravity
-                ctx.translate(p.x,p.y); ctx.rotate(p.rot);
-                ctx.fillStyle=p.color;
-                if(p.shape==='rect'){{ctx.fillRect(-p.r,-p.r/2,p.r*2,p.r);}}
-                else{{ctx.beginPath();ctx.arc(0,0,p.r,0,Math.PI*2);ctx.fill();}}
-            }}else{{
-                ctx.fillStyle=color;
-                ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();
-            }}
-            ctx.restore();
-        }}
-        requestAnimationFrame(draw);
-    }}
-
-    if(isViral){{
-        // Confetti burst from top
-        setTimeout(()=>{{for(let i=0;i<60;i++) setTimeout(spawnConfetti, i*25);}},200);
-        setInterval(()=>{{if(particles.filter(p=>p.isConfetti).length<30) spawnConfetti();}},800);
-    }} else {{
-        setTimeout(()=>{{for(let i=0;i<20;i++)spawn();}},300);
-        setInterval(()=>{{if(particles.length<35)spawn();}},350);
-    }}
-    draw();
-    window.addEventListener('resize',()=>{{canvas.width=window.innerWidth;canvas.height=window.innerHeight;}});
+(function(){{
+  const cv=document.getElementById('res-canvas'); if(!cv)return;
+  const ctx=cv.getContext('2d');
+  cv.width=window.innerWidth; cv.height=window.innerHeight;
+  const pts=[]; const col='{pcol}';
+  const isViral='{tipo}'==='viral';
+  const cc=['#22C55E','#3B82F6','#14B8A6','#A78BFA','#F59E0B','#EC4899'];
+  function spawnC(){{pts.push({{x:Math.random()*cv.width,y:-10,vx:(Math.random()-.5)*3,vy:Math.random()*3+1,r:Math.random()*6+3,color:cc[Math.floor(Math.random()*cc.length)],rot:Math.random()*Math.PI*2,vrot:(Math.random()-.5)*.15,shape:Math.random()>.5?'rect':'circle',life:Math.random()*120+100,age:0,isC:true}});}}
+  function spawn(){{pts.push({{x:Math.random()*cv.width,y:cv.height+10,vx:(Math.random()-.5)*1.2,vy:-(Math.random()*2.2+.8),r:Math.random()*5+2,life:Math.random()*100+80,age:0,isC:false}});}}
+  function draw(){{ctx.clearRect(0,0,cv.width,cv.height);for(let i=pts.length-1;i>=0;i--){{const p=pts[i];p.x+=p.vx;p.y+=p.vy;p.age++;if(p.age>=p.life){{pts.splice(i,1);continue;}}ctx.save();ctx.globalAlpha=(1-p.age/p.life)*.75;if(p.isC){{p.rot+=p.vrot;p.vy+=.04;ctx.translate(p.x,p.y);ctx.rotate(p.rot);ctx.fillStyle=p.color;if(p.shape==='rect')ctx.fillRect(-p.r,-p.r/2,p.r*2,p.r);else{{ctx.beginPath();ctx.arc(0,0,p.r,0,Math.PI*2);ctx.fill();}}}}else{{ctx.fillStyle=col;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();}}ctx.restore();}}requestAnimationFrame(draw);}}
+  if(isViral){{setTimeout(()=>{{for(let i=0;i<60;i++)setTimeout(spawnC,i*25);}},200);setInterval(()=>{{if(pts.filter(p=>p.isC).length<30)spawnC();}},800);}}else{{setTimeout(()=>{{for(let i=0;i<20;i++)spawn();}},300);setInterval(()=>{{if(pts.length<35)spawn();}},350);}}
+  draw(); window.addEventListener('resize',()=>{{cv.width=window.innerWidth;cv.height=window.innerHeight;}});
 }})();
 </script>
 
 <div class="res-page">
-  <div class="res-meta-bar">
-    <div>
-      <div class="meta-folio">Reporte Clínico · SITRE CDSS v2.0 · {nombre_pat_display}</div>
-      <div class="meta-datetime">📅 {fecha_str} &nbsp;·&nbsp; 🕒 {hora_str} hrs</div>
+
+  <!-- META BAR -->
+  <div class="res-meta">
+    <div class="meta-left">
+      Reporte Clínico · SITRE CDSS v2.0 · {nombre_pat_display}
+      <span>📅 {fecha_str} · 🕒 {hora_str}</span>
     </div>
     <div class="meta-right">
-      <b style="color:var(--teal-light); font-family:monospace; font-size:0.85rem;">{folio}</b><br>
-      <span style="font-size:0.58rem; color:rgba(240,253,250,0.35); font-family:monospace; letter-spacing:0.5px;">SHA-256·{decision_info["hash_short"]}…</span><br>
-      Noreste · Coahuila / NL
+      <b style="color:var(--teal-light);">{folio}</b><br>
+      SHA-256·{decision_info["hash_short"]}… · Noreste MX
     </div>
   </div>
-  <div class="patient-bar">
+
+  <!-- PATIENT BAR -->
+  <div class="pat-bar">
     <div>
-      <div class="patient-label">Paciente evaluado</div>
-      <div class="patient-name">{nombre_pac}</div>
+      <div class="pat-label">Paciente evaluado</div>
+      <div class="pat-name">{nombre_pac}</div>
     </div>
-    <div class="patient-folio">
+    <div class="pat-folio">
       <span style="color:var(--teal-light);">●</span> Triage activo<br>
-      <span style="font-family:monospace;">{folio}</span>
+      <span style="font-family:monospace;font-size:0.6rem;">{folio}</span>
     </div>
   </div>
-  <div class="res-hero">
-    <div class="res-hero-bg"></div>
-    <div class="res-hero-inner">
-      <div class="hero-icon">{c["emoji"]}</div>
+
+  {banner_diabetes}
+
+  <!-- HERO CARD -->
+  <div class="hero">
+    <div class="hero-bg"></div>
+    <div class="hero-inner">
+      <div class="hero-emoji">{c["emoji"]}</div>
       <div>
         <span class="hero-tag">{c["tag"]}</span>
         <div class="hero-label">{c["label"]}</div>
@@ -1561,326 +1571,512 @@ elif st.session_state.pantalla == "resultados":
     </div>
   </div>
 
-  {banner_diabetes}
-
-  <div class="cards-row">
-    <div class="info-card">
-      <div class="info-card-label">{score_label}</div>
-      <div class="gauge-number" style="color:{gauge_color};">{score_val}<span style="font-size:1.2rem;color:var(--muted);">/{score_max}</span></div>
-      <div class="gauge-bar-bg"><div class="gauge-bar-fill"></div></div>
-      <div class="gauge-ticks">{"".join(f"<span>{i}</span>" for i in range(score_max+1))}</div>
+  <!-- SCORES -->
+  <div class="scores-row">
+    <div class="score-card">
+      <div class="score-lbl">{score_label}</div>
+      <div class="score-num" style="color:{gauge_color};">{score_val}<span style="font-size:1.1rem;color:rgba(240,253,250,0.3);">/{score_max}</span></div>
+      <div class="bar-bg"><div class="bar-fill-s"></div></div>
+      <div class="bar-ticks">{"".join(f"<span>{i}</span>" for i in range(score_max+1))}</div>
     </div>
-    <div class="info-card">
-      <div class="info-card-label">{viral_label}</div>
-      <div class="gauge-number" style="color:#3B82F6;">{viral_val}<span style="font-size:1.2rem;color:var(--muted);">/{viral_max}</span></div>
-      <div class="gauge-bar-bg"><div class="viral-bar-fill"></div></div>
-      <div class="gauge-ticks">{"".join(f"<span>{i}</span>" for i in range(viral_max+1))}</div>
+    <div class="score-card">
+      <div class="score-lbl">{viral_label}</div>
+      <div class="score-num" style="color:#3B82F6;">{viral_val}<span style="font-size:1.1rem;color:rgba(240,253,250,0.3);">/{viral_max}</span></div>
+      <div class="bar-bg"><div class="bar-fill-v"></div></div>
+      <div class="bar-ticks">{"".join(f"<span>{i}</span>" for i in range(viral_max+1))}</div>
     </div>
   </div>
+
+  <!-- GUÍA TERAPÉUTICA -->
   <div class="tx-card">
-    <div class="tx-label">💊 Guía Terapéutica Sugerida</div>
+    <div class="tx-eyebrow">💊 Guía Terapéutica Sugerida</div>
     <div class="tx-body">{trat_html}</div>
   </div>
-  <div class="fund-card">
-    <div class="fund-label">📚 Referencia Clínica</div>
-    <div class="fund-body">{"Score CURB-65 · British Thoracic Society (Lim et al, Thorax 2003). Validado en 1,068 pacientes. Mortalidad: CURB-65 0-1 &lt;3%, 2: 9%, ≥3: 15-40%." if patologia=="neumonia" else "Score McIsaac · Modificación del Score Centor (McIsaac et al, JAMA 2004). Estándar de oro para diagnóstico de faringitis estreptocócica." if patologia=="faringitis" else "Criterios diagnósticos de OMA · AAP/AAFP 2013 + Consenso SEIP 2023 (An Pediatr 98:362-72). Diferenciación confirmada vs probable." if patologia=="oma" else "Criterios IDSA para Rinosinusitis Bacteriana Aguda · Chow et al, Clin Infect Dis 2012;54:e72-112. Patrón temporal como diferenciador viral-bacteriano."}</div>
+
+  <!-- REFERENCIA ACADÉMICA (pill discreta) -->
+  <div class="ref-pill">
+    📚 <b>{"Lim et al. Thorax 2003;58:377 · doi:10.1136/thorax.58.5.377" if patologia=="neumonia" else "McIsaac WJ et al. JAMA 2004;291:1589 · doi:10.1001/jama.291.13.1589" if patologia=="faringitis" else "Lieberthal AS et al. Pediatrics 2013;131:e964 · doi:10.1542/peds.2012-3488" if patologia=="oma" else "Chow AW et al. Clin Infect Dis 2012;54:e72 · doi:10.1093/cid/cir1049"}</b>
   </div>
+
 </div>
 """, unsafe_allow_html=True)
-    
-# ▼▼▼ MEGAZORD 10: PEDIATRIC PRECISION DOSING ▼▼▼
-    # Solo aparece si es menor de 12 años y requiere antibiótico
+
+    # ══════════════════════════════════════════════════════════════
+    # PEDIATRIC DOSING (si aplica — antes de Caja de Cristal)
+    # ══════════════════════════════════════════════════════════════
     if paciente and paciente.edad < 12 and tipo == "bacteriana":
         st.markdown("""
-        <div style="background:rgba(14, 165, 233, 0.05); border:1px solid rgba(14, 165, 233, 0.3); border-radius:18px; padding:22px 24px; margin-bottom:22px; animation:fade-up 0.5s 0.38s both;">
-            <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
-                <span style="font-size:1.8rem;">🧸</span>
-                <div>
-                    <div style="font-size:0.6rem; font-weight:700; letter-spacing:3px; text-transform:uppercase; color:#0EA5E9;">Módulo Pediátrico Seguro</div>
-                    <div style="font-size:1.1rem; color:#F0FDFA; font-weight:600; font-family:'DM Serif Display',serif;">Calculadora de Suspensión (Volumen)</div>
-                </div>
+        <div style="max-width:980px;margin:0 auto 18px;background:rgba(14,165,233,0.05);
+            border:1px solid rgba(14,165,233,0.28);border-radius:16px;padding:20px 22px;">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+            <span style="font-size:1.6rem;">🧸</span>
+            <div>
+              <div style="font-size:0.58rem;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#0EA5E9;">Módulo Pediátrico Seguro</div>
+              <div style="font-size:1rem;color:#F0FDFA;font-weight:600;font-family:'DM Serif Display',serif;">Calculadora de Suspensión</div>
             </div>
-            <p style="font-size:0.85rem; color:rgba(240,253,250,0.6); margin-bottom:16px;">Calcule los mililitros exactos para la receta. El sistema incluye protección automática contra sobredosis superando el umbral de adulto.</p>
+          </div>
+          <p style="font-size:0.83rem;color:rgba(240,253,250,0.5);margin-bottom:14px;">
+            Calcula los mL exactos. Safety cap automático contra sobredosis.
+          </p>
         """, unsafe_allow_html=True)
-        
-        ped_col1, ped_col2, ped_col3 = st.columns([1, 1, 1.5])
-        with ped_col1:
+        pc1, pc2, pc3 = st.columns([1, 1, 1.5])
+        with pc1:
             peso_kg = st.number_input("Peso (kg)", min_value=3.0, max_value=60.0, value=15.0, step=0.5)
-        with ped_col2:
-            dosis_mg_kg = st.selectbox("Dosis (mg/kg/día)", [80, 90, 50], help="80-90mg para OMA/Sinusitis/Neumonía. 50mg para Faringitis.")
-        with ped_col3:
-            presentacion = st.selectbox("Presentación en Farmacia", ["250 mg / 5 mL", "400 mg / 5 mL", "500 mg / 5 mL"])
-            
-        # Lógica matemática clínica
-        mg_totales_dia = peso_kg * dosis_mg_kg
-        limite_max_dia = 3000 # Límite máximo seguro para no exceder dosis de adulto (Amoxicilina)
-        
-        if mg_totales_dia > limite_max_dia:
-            mg_totales_dia = limite_max_dia
-            alerta_limite = f"<br><span style='color:#EF4444; font-size:0.75rem; font-weight:bold;'>⚠️ Umbral de seguridad activado: Dosis topada a {limite_max_dia} mg/día para evitar toxicidad.</span>"
+        with pc2:
+            dosis_mg_kg = st.selectbox("Dosis (mg/kg/día)", [80, 90, 50])
+        with pc3:
+            presentacion = st.selectbox("Presentación", ["250 mg / 5 mL", "400 mg / 5 mL", "500 mg / 5 mL"])
+        mg_totales = peso_kg * dosis_mg_kg
+        if mg_totales > 3000:
+            mg_totales = 3000
+            alerta_cap = "<br><span style='color:#EF4444;font-size:0.73rem;font-weight:700;'>⚠️ Umbral de seguridad: dosis topada a 3,000 mg/día.</span>"
         else:
-            alerta_limite = ""
-            
-        # Extraer concentración seleccionada y calcular mL
-        mg_por_5ml = int(presentacion.split(" ")[0])
-        ml_totales_dia = (mg_totales_dia * 5) / mg_por_5ml
-        ml_por_toma_8h = ml_totales_dia / 3
-        ml_por_toma_12h = ml_totales_dia / 2
-        
+            alerta_cap = ""
+        mg5ml = int(presentacion.split(" ")[0])
+        ml_dia = (mg_totales * 5) / mg5ml
         st.markdown(f"""
-            <div style="background:rgba(0,0,0,0.25); border-radius:12px; padding:16px; margin-top:16px; border-left:3px solid #0EA5E9;">
-                <div style="font-size:0.7rem; color:#0EA5E9; font-weight:700; letter-spacing:1px; margin-bottom:8px;">TEXTO PARA RECETA MÉDICA</div>
-                <div style="font-size:1.15rem; color:#F0FDFA; margin-bottom:4px;">
-                    Tomar <b>{ml_por_toma_8h:.1f} mL</b> cada 8 horas <span style="font-size:0.8rem; color:var(--muted);">o {ml_por_toma_12h:.1f} mL cada 12 hrs</span>
-                </div>
-                <div style="font-size:0.75rem; color:rgba(240,253,250,0.4);">
-                    Dosis metabólica: {mg_totales_dia:,.0f} mg/día {alerta_limite}
-                </div>
+          <div style="background:rgba(0,0,0,0.2);border-radius:10px;padding:14px 16px;
+              margin-top:12px;border-left:3px solid #0EA5E9;">
+            <div style="font-size:0.6rem;color:#0EA5E9;font-weight:700;letter-spacing:1px;margin-bottom:6px;">TEXTO PARA RECETA</div>
+            <div style="font-size:1.1rem;color:#F0FDFA;">
+              Tomar <b>{ml_dia/3:.1f} mL</b> cada 8h
+              <span style="font-size:0.8rem;color:rgba(240,253,250,0.4);"> · {ml_dia/2:.1f} mL cada 12h</span>
             </div>
+            <div style="font-size:0.72rem;color:rgba(240,253,250,0.35);margin-top:4px;">
+              {mg_totales:,.0f} mg/día{alerta_cap}
+            </div>
+          </div>
         </div>
         """, unsafe_allow_html=True)
-    # ▲▲▲ FIN MEGAZORD 10 ▲▲▲
-    # ── PANEL DE EXPLICABILIDAD "CAJA DE CRISTAL" ──────────────────────
+
+    # ══════════════════════════════════════════════════════════════
+    # BLOQUE 2 — CAJA DE CRISTAL  (colapsable con <details>)
+    # ══════════════════════════════════════════════════════════════
     razonamiento = resultado.get("razonamiento", None)
     if razonamiento:
         pasos = razonamiento.get("pasos", [])
-
-        # Construir HTML de pasos SIN espacios duros
         pasos_html = ""
         for paso in pasos:
             items_html = ""
             for item in paso["items"]:
-                pts_badge = f'<span style="font-size:0.58rem;font-weight:700;color:{item["color"]};border:1px solid {item["color"]}44;border-radius:4px;padding:1px 6px;background:{item["color"]}11;margin-left:6px;">{item["pts"]}</span>' if item.get("pts","") else ""
-                items_html += f'<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);"><div style="display:flex;align-items:center;gap:8px;"><div style="width:6px;height:6px;border-radius:50%;background:{item["color"]};flex-shrink:0;"></div><span style="font-size:0.78rem;color:rgba(240,253,250,0.6);">{item["label"]}</span></div><div style="display:flex;align-items:center;gap:4px;"><span style="font-size:0.72rem;font-weight:600;color:{item["color"]};">{item["status"]}</span>{pts_badge}</div></div>'
-
-            resultado_row = f'<div style="margin-top:10px;padding:8px 12px;background:rgba(255,255,255,0.03);border-radius:8px;border-left:3px solid {paso["resultado_color"]};"><span style="font-size:0.72rem;font-weight:700;color:{paso["resultado_color"]};letter-spacing:1px;">{paso["resultado"]}</span></div>' if paso.get("resultado") else ""
-
-            pasos_html += f'<div style="margin-bottom:16px;padding:14px 16px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;"><div style="font-size:0.62rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#14B8A6;margin-bottom:10px;">{paso["titulo"]}</div>{items_html}{resultado_row}</div>'
+                pts_b = (f'<span style="font-size:0.58rem;font-weight:700;color:{item["color"]};'
+                         f'border:1px solid {item["color"]}44;border-radius:4px;padding:1px 6px;'
+                         f'background:{item["color"]}11;margin-left:6px;">{item["pts"]}</span>'
+                         if item.get("pts", "") else "")
+                items_html += (
+                    f'<div style="display:flex;align-items:center;justify-content:space-between;'
+                    f'padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);">'
+                    f'<div style="display:flex;align-items:center;gap:8px;">'
+                    f'<div style="width:6px;height:6px;border-radius:50%;background:{item["color"]};flex-shrink:0;"></div>'
+                    f'<span style="font-size:0.77rem;color:rgba(240,253,250,0.6);">{item["label"]}</span>'
+                    f'</div>'
+                    f'<div style="display:flex;align-items:center;gap:4px;">'
+                    f'<span style="font-size:0.72rem;font-weight:600;color:{item["color"]};">{item["status"]}</span>{pts_b}'
+                    f'</div></div>'
+                )
+            res_row = (
+                f'<div style="margin-top:8px;padding:7px 12px;background:rgba(255,255,255,0.03);'
+                f'border-radius:8px;border-left:3px solid {paso["resultado_color"]};">'
+                f'<span style="font-size:0.7rem;font-weight:700;color:{paso["resultado_color"]};'
+                f'letter-spacing:1px;">{paso["resultado"]}</span></div>'
+                if paso.get("resultado") else ""
+            )
+            pasos_html += (
+                f'<div style="margin-bottom:14px;padding:13px 15px;background:rgba(255,255,255,0.02);'
+                f'border:1px solid rgba(255,255,255,0.06);border-radius:12px;">'
+                f'<div style="font-size:0.6rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;'
+                f'color:#14B8A6;margin-bottom:9px;">{paso["titulo"]}</div>'
+                f'{items_html}{res_row}</div>'
+            )
 
         st.markdown(f"""
-        <style>
-        details.glass-box {{ background:rgba(255,255,255,0.02); border:1px solid rgba(20,184,166,0.2); border-radius:14px; margin-bottom: 20px; }}
-        details.glass-box summary {{ display:flex; align-items:center; justify-content:space-between; padding:16px 20px; cursor:pointer; list-style:none; transition:background 0.2s; border-radius:14px; }}
-        details.glass-box summary::-webkit-details-marker {{ display:none; }}
-        details.glass-box summary:hover {{ background:rgba(20,184,166,0.05); }}
-        details.glass-box .chevron {{ transition:transform 0.3s; font-size:0.8rem; color:#14B8A6; }}
-        details.glass-box[open] .chevron {{ transform:rotate(180deg); }}
-        details.glass-box[open] summary {{ border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom: 1px solid rgba(255,255,255,0.05); }}
-        .exp-body-content {{ padding: 16px 20px; animation:fadeIn 0.4s ease; }}
-        @keyframes fadeIn{{from{{opacity:0;transform:translateY(-4px)}}to{{opacity:1;transform:translateY(0)}}}}
-        </style>
-        <details class="glass-box">
-        <summary>
-        <div style="display:flex;align-items:center;gap:14px;"><span style="font-size:1.1rem;">&#128269;</span><div><div style="font-size:0.62rem;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#14B8A6;margin-bottom:2px;">Caja de Cristal · Explicabilidad de la Decisión</div><div style="font-size:0.82rem;color:rgba(240,253,250,0.6);">Motor: {razonamiento["motor"]} &nbsp;&#183;&nbsp; Guia: {razonamiento["guia"]} &nbsp;&#183;&nbsp; Respuesta: {razonamiento["ms"]}ms</div></div></div><div style="display:flex;align-items:center;gap:10px;flex-shrink:0;"><span style="font-size:0.58rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#22C55E;border:1px solid #22C55E44;border-radius:99px;padding:3px 10px;background:#22C55E11;">&#10003; Determinista</span><span class="chevron">&#9660;</span></div>
-        </summary>
-        <div class="exp-body-content">
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;"><div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:10px 14px;"><div style="font-size:0.55rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(240,253,250,0.3);margin-bottom:4px;">Motor</div><div style="font-size:0.78rem;color:#F0FDFA;font-weight:600;">{razonamiento["motor"]}</div></div><div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:10px 14px;"><div style="font-size:0.55rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(240,253,250,0.3);margin-bottom:4px;">DOI</div><div style="font-size:0.75rem;color:#14B8A6;font-weight:600;">{razonamiento["doi"]}</div></div><div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:10px 14px;"><div style="font-size:0.55rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(240,253,250,0.3);margin-bottom:4px;">Tiempo de respuesta</div><div style="font-size:0.78rem;color:#F0FDFA;font-weight:600;">{razonamiento["ms"]} ms</div></div></div>
-        {pasos_html}
-        <div style="margin-top:4px;padding:10px 14px;background:rgba(34,197,94,0.05);border:1px solid rgba(34,197,94,0.15);border-radius:10px;"><span style="font-size:0.62rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#22C55E;margin-right:8px;">&#10003; Sistema Determinista</span><span style="font-size:0.72rem;color:rgba(240,253,250,0.5);">{razonamiento["deterministic_note"]}</span></div><div style="margin-top:10px;padding:10px 14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px;"><div style="font-size:0.55rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(240,253,250,0.3);margin-bottom:5px;">Referencia Academica Completa (PubMed)</div><div style="font-size:0.75rem;color:rgba(240,253,250,0.5);line-height:1.5;font-style:italic;">{razonamiento["ref_completa"]}</div></div>
+<style>
+details.cc {{ background:rgba(255,255,255,0.02); border:1px solid rgba(20,184,166,0.22);
+              border-radius:14px; margin:0 auto 18px; max-width:980px; }}
+details.cc summary {{ display:flex; align-items:center; justify-content:space-between;
+                      padding:15px 20px; cursor:pointer; list-style:none;
+                      border-radius:14px; transition:background .2s; }}
+details.cc summary::-webkit-details-marker {{ display:none; }}
+details.cc summary:hover {{ background:rgba(20,184,166,0.05); }}
+details.cc[open] summary {{ border-bottom-left-radius:0; border-bottom-right-radius:0;
+                             border-bottom:1px solid rgba(255,255,255,0.05); }}
+details.cc .chevron {{ transition:transform .3s; font-size:.8rem; color:#14B8A6; }}
+details.cc[open] .chevron {{ transform:rotate(180deg); }}
+.cc-body {{ padding:16px 20px; animation:fadeIn .3s ease; }}
+@keyframes fadeIn{{from{{opacity:0;transform:translateY(-4px)}}to{{opacity:1;transform:translateY(0)}}}}
+</style>
+<details class="cc">
+  <summary>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span style="font-size:1.1rem;">🔍</span>
+      <div>
+        <div style="font-size:0.6rem;font-weight:700;letter-spacing:3px;text-transform:uppercase;
+            color:#14B8A6;margin-bottom:2px;">Caja de Cristal · Explicabilidad de la Decisión</div>
+        <div style="font-size:0.8rem;color:rgba(240,253,250,0.55);">
+          Motor: {razonamiento["motor"]} &nbsp;·&nbsp;
+          DOI: {razonamiento["doi"]} &nbsp;·&nbsp;
+          {razonamiento["ms"]}ms
         </div>
-        </details>
-        """, unsafe_allow_html=True)
-    # ── LÍNEA DE TIEMPO "SIN TRATAMIENTO" ─────────────────────────────
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+      <span style="font-size:0.58rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+          color:#22C55E;border:1px solid #22C55E44;border-radius:99px;
+          padding:3px 10px;background:#22C55E11;">✓ Determinista</span>
+      <span class="chevron">▾</span>
+    </div>
+  </summary>
+  <div class="cc-body">
+    <!-- 3 meta pills -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;">
+      <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);
+          border-radius:10px;padding:10px 14px;">
+        <div style="font-size:0.52rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+            color:rgba(240,253,250,0.3);margin-bottom:3px;">Motor</div>
+        <div style="font-size:0.75rem;color:#F0FDFA;font-weight:600;">{razonamiento["motor"]}</div>
+      </div>
+      <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);
+          border-radius:10px;padding:10px 14px;">
+        <div style="font-size:0.52rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+            color:rgba(240,253,250,0.3);margin-bottom:3px;">DOI</div>
+        <div style="font-size:0.72rem;color:#14B8A6;font-weight:600;">{razonamiento["doi"]}</div>
+      </div>
+      <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);
+          border-radius:10px;padding:10px 14px;">
+        <div style="font-size:0.52rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+            color:rgba(240,253,250,0.3);margin-bottom:3px;">Respuesta</div>
+        <div style="font-size:0.75rem;color:#F0FDFA;font-weight:600;">{razonamiento["ms"]} ms</div>
+      </div>
+    </div>
+    {pasos_html}
+    <!-- Determinismo + Referencia completa -->
+    <div style="padding:9px 13px;background:rgba(34,197,94,0.05);
+        border:1px solid rgba(34,197,94,0.15);border-radius:10px;margin-bottom:10px;">
+      <span style="font-size:0.6rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+          color:#22C55E;margin-right:8px;">✓ Sistema Determinista</span>
+      <span style="font-size:0.7rem;color:rgba(240,253,250,0.45);">{razonamiento["deterministic_note"]}</span>
+    </div>
+    <div style="padding:10px 13px;background:rgba(255,255,255,0.02);
+        border:1px solid rgba(255,255,255,0.06);border-radius:10px;">
+      <div style="font-size:0.52rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+          color:rgba(240,253,250,0.3);margin-bottom:4px;">Referencia PubMed</div>
+      <div style="font-size:0.73rem;color:rgba(240,253,250,0.45);line-height:1.5;font-style:italic;">
+        {razonamiento["ref_completa"]}</div>
+    </div>
+  </div>
+</details>
+""", unsafe_allow_html=True)
+
+    # ══════════════════════════════════════════════════════════════
+    # BLOQUE 3 — TIMELINE "SIN TRATAMIENTO"
+    # ══════════════════════════════════════════════════════════════
     TIMELINES = {
         "faringitis": {
             "bacteriana": [
-                ("0h",  "#14B8A6", "Consulta actual", "Faringitis estreptocócica identificada. Ventana óptima de tratamiento."),
-                ("48h", "#F59E0B", "Sin mejoría",     "Persistencia de fiebre y dolor intenso. Riesgo de absceso periamigdalino."),
-                ("5d",  "#EF4444", "Complicación",    "Fiebre reumática aguda: riesgo de carditis en 1-3% sin tratamiento antibiótico."),
-                ("3sem","#991B1B", "Secuela",         "Glomerulonefritis post-estreptocócica. Daño renal irreversible potencial."),
+                ("0h","#14B8A6","Consulta actual","Faringitis estreptocócica identificada. Ventana óptima de tratamiento."),
+                ("48h","#F59E0B","Sin mejoría","Persistencia de fiebre. Riesgo de absceso periamigdalino."),
+                ("5d","#EF4444","Complicación","Fiebre reumática aguda: riesgo de carditis 1-3% sin antibiótico."),
+                ("3sem","#991B1B","Secuela","Glomerulonefritis post-estreptocócica. Daño renal irreversible potencial."),
             ],
             "viral": [
-                ("0h",  "#14B8A6", "Consulta actual", "Cuadro viral confirmado. Antibiótico NO indicado."),
-                ("3d",  "#3B82F6", "Pico sintomático","Máxima carga viral. Reposo e hidratación son el tratamiento correcto."),
-                ("7d",  "#22C55E", "Resolución",      "Resolución espontánea esperada. Sin secuelas con manejo conservador."),
+                ("0h","#14B8A6","Consulta actual","Cuadro viral confirmado. Antibiótico NO indicado."),
+                ("3d","#3B82F6","Pico sintomático","Máxima carga viral. Reposo e hidratación son el tratamiento correcto."),
+                ("7d","#22C55E","Resolución","Resolución espontánea esperada. Sin secuelas con manejo conservador."),
             ],
             "urgencia": [
-                ("0h",  "#EF4444", "Consulta actual", "Hipoxia o taquipnea detectada. Riesgo vital inmediato."),
-                ("1h",  "#991B1B", "Crítico",         "Sin soporte de oxígeno: insuficiencia respiratoria progresiva."),
+                ("0h","#EF4444","Consulta actual","Hipoxia o taquipnea. Riesgo vital inmediato."),
+                ("1h","#991B1B","Crítico","Sin soporte O₂: insuficiencia respiratoria progresiva."),
             ],
         },
         "neumonia": {
             "urgencia": [
-                ("0h",  "#EF4444", "Evaluación",      "CURB-65 alto. Mortalidad estimada >15% sin hospitalización."),
-                ("6h",  "#991B1B", "Deterioro",       "Hipoxemia progresiva. Riesgo de ventilación mecánica sin tratamiento IV."),
-                ("24h", "#7F1D1D", "Sepsis",          "Bacteriemia con sepsis. Mortalidad sube a 30-40% sin antibiótico precoz."),
+                ("0h","#EF4444","Evaluación","CURB-65 alto. Mortalidad >15% sin hospitalización."),
+                ("6h","#991B1B","Deterioro","Hipoxemia progresiva. Riesgo VM sin antibiótico IV."),
+                ("24h","#7F1D1D","Sepsis","Bacteriemia con sepsis. Mortalidad 30-40% sin antibiótico precoz."),
             ],
             "gris": [
-                ("0h",  "#F59E0B", "Evaluación",      "Neumonía moderada. Seguimiento estrecho requerido en 48h."),
-                ("48h", "#EF4444", "Revisión crítica","Sin mejoría en 48h = hospitalización obligatoria. No diferir."),
-                ("7d",  "#22C55E", "Con tratamiento", "Resolución clínica esperada con antibiótico y seguimiento."),
+                ("0h","#F59E0B","Evaluación","Neumonía moderada. Seguimiento estrecho a 48h."),
+                ("48h","#EF4444","Revisión crítica","Sin mejoría = hospitalización obligatoria."),
+                ("7d","#22C55E","Con tratamiento","Resolución esperada con antibiótico y seguimiento."),
             ],
             "viral": [
-                ("0h",  "#14B8A6", "Evaluación",      "Neumonía leve (CURB-65 0-1). Mortalidad <3%. Manejo ambulatorio seguro."),
-                ("48h", "#3B82F6", "Revisión",        "Control obligatorio en 48h. Si empeora: hospitalización inmediata."),
-                ("6sem","#22C55E", "Resolución",      "Radiografía de control en 4-6 semanas para confirmar resolución completa."),
+                ("0h","#14B8A6","Evaluación","Neumonía leve (CURB-65 0-1). Mortalidad <3%. Ambulatorio."),
+                ("48h","#3B82F6","Revisión","Control obligatorio a 48h. Si empeora: hospitalizar."),
+                ("6sem","#22C55E","Resolución","Rx de control a 4-6 semanas para confirmar resolución."),
             ],
         },
         "oma": {
             "bacteriana": [
-                ("0h",  "#14B8A6", "Diagnóstico",     "OMA confirmada. Inicio de antibiótico reduce complicaciones en 80%."),
-                ("72h", "#F59E0B", "Sin antibiótico",  "Otalgia persistente, riesgo de mastoiditis incipiente."),
-                ("7d",  "#EF4444", "Complicación",    "Mastoiditis aguda: extensión al hueso mastoideo. Requiere hospitalización."),
-                ("3sem","#991B1B", "Secuela",         "Hipoacusia conductiva de transmisión. Riesgo de daño permanente."),
+                ("0h","#14B8A6","Diagnóstico","OMA confirmada. Antibiótico reduce complicaciones 80%."),
+                ("72h","#F59E0B","Sin antibiótico","Otalgia persistente. Riesgo de mastoiditis incipiente."),
+                ("7d","#EF4444","Complicación","Mastoiditis aguda. Requiere hospitalización."),
+                ("3sem","#991B1B","Secuela","Hipoacusia conductiva. Riesgo de daño permanente."),
             ],
             "gris": [
-                ("0h",  "#F59E0B", "OMA probable",    "2/3 criterios. Observación activa 48-72h antes de antibiótico."),
-                ("48h", "#14B8A6", "Revisión",        "Si mejora: continuar observación. Si empeora: iniciar antibiótico."),
+                ("0h","#F59E0B","OMA probable","2/3 criterios. Observación 48-72h antes de antibiótico."),
+                ("48h","#14B8A6","Revisión","Si mejora: continuar. Si empeora: iniciar antibiótico."),
             ],
             "viral": [
-                ("0h",  "#3B82F6", "Sin criterios",   "No cumple OMA. Probable viral. Manejo sintomático."),
-                ("7d",  "#22C55E", "Resolución",      "Curación espontánea esperada. Sin antibiótico necesario."),
+                ("0h","#3B82F6","Sin criterios","No cumple OMA. Probable viral. Manejo sintomático."),
+                ("7d","#22C55E","Resolución","Curación espontánea esperada. Sin antibiótico."),
             ],
         },
         "sinusitis": {
             "bacteriana": [
-                ("0h",  "#14B8A6", "Diagnóstico",     "Sinusitis bacteriana confirmada. Antibiótico reduce duración 2-3 días."),
-                ("5d",  "#F59E0B", "Sin mejoría",     "Persistencia sin antibiótico. Riesgo de extensión a senos adyacentes."),
-                ("14d", "#EF4444", "Complicación",    "Celulitis orbitaria o sinusitis frontal: emergencia que requiere TAC urgente."),
-                ("30d", "#991B1B", "Secuela",         "Sinusitis crónica. Requiere cirugía endoscópica en >20% de casos."),
+                ("0h","#14B8A6","Diagnóstico","Sinusitis bacteriana. Antibiótico reduce duración 2-3 días."),
+                ("5d","#F59E0B","Sin mejoría","Riesgo extensión a senos adyacentes."),
+                ("14d","#EF4444","Complicación","Celulitis orbitaria. TAC urgente."),
+                ("30d","#991B1B","Secuela","Sinusitis crónica. Cirugía endoscópica >20% casos."),
             ],
             "viral": [
-                ("0h",  "#3B82F6", "Diagnóstico",     "Rinosinusitis viral. 80-85% resuelve espontáneamente sin antibiótico."),
-                ("7d",  "#14B8A6", "Mejoría",         "Reducción progresiva de síntomas. Irrigación nasal acelera recuperación."),
-                ("10d", "#F59E0B", "Vigilancia",      "Si a día 10 no mejora o empeora: reevaluar etiología bacteriana."),
+                ("0h","#3B82F6","Diagnóstico","Rinosinusitis viral. 80-85% resuelve sin antibiótico."),
+                ("7d","#14B8A6","Mejoría","Reducción progresiva. Irrigación nasal acelera recuperación."),
+                ("10d","#F59E0B","Vigilancia","Si no mejora día 10: reevaluar etiología bacteriana."),
             ],
             "urgencia": [
-                ("0h",  "#EF4444", "Banderas rojas",  "Edema periorbitario o rigidez nucal. Posible extensión orbitaria/intracraneal."),
-                ("2h",  "#991B1B", "Urgencia",        "Sin TAC urgente y antibiótico IV: riesgo de absceso cerebral o ceguera."),
+                ("0h","#EF4444","Banderas rojas","Edema periorbitario o rigidez nucal. Extensión posible."),
+                ("2h","#991B1B","Urgencia","Sin TAC + antibiótico IV: riesgo de absceso cerebral."),
             ],
         },
     }
 
-    timeline_pasos = TIMELINES.get(patologia, {}).get(tipo, TIMELINES.get(patologia, {}).get("viral", []))
+    tl_pasos = TIMELINES.get(patologia, {}).get(tipo, TIMELINES.get(patologia, {}).get("viral", []))
+    if tl_pasos:
+        tl_html = ""
+        for i, (tiempo, color, titulo, desc) in enumerate(tl_pasos):
+            ultimo = i == len(tl_pasos) - 1
+            lc = "#1A2E2E" if ultimo else color
+            tl_html += f"""
+<div style="display:flex;gap:0;align-items:flex-start;">
+  <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:40px;">
+    <div style="width:11px;height:11px;border-radius:50%;background:{color};
+        box-shadow:0 0 7px {color}88;margin-top:4px;flex-shrink:0;"></div>
+    {"" if ultimo else f'<div style="width:2px;flex:1;min-height:28px;background:linear-gradient({color},{lc});margin:3px 0;"></div>'}
+  </div>
+  <div style="padding-bottom:{"0" if ultimo else "16px"};flex:1;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
+      <span style="font-size:0.6rem;font-weight:700;letter-spacing:2px;color:{color};
+          border:1px solid {color}55;border-radius:99px;padding:2px 7px;background:{color}12;">{tiempo}</span>
+      <span style="font-size:0.83rem;font-weight:600;color:#F0FDFA;">{titulo}</span>
+    </div>
+    <div style="font-size:0.78rem;color:rgba(240,253,250,0.48);line-height:1.45;">{desc}</div>
+  </div>
+</div>"""
 
-    if timeline_pasos and tipo != "gris":
-        pasos_html = ""
-        for i, (tiempo, color, titulo, desc) in enumerate(timeline_pasos):
-            es_ultimo = i == len(timeline_pasos) - 1
-            linea_color = "#1A2E2E" if es_ultimo else color
-            pasos_html += f"""
-            <div style="display:flex; gap:0; align-items:flex-start;">
-              <div style="display:flex; flex-direction:column; align-items:center; flex-shrink:0; width:44px;">
-                <div style="width:12px; height:12px; border-radius:50%; background:{color};
-                    box-shadow:0 0 8px {color}88; margin-top:4px; flex-shrink:0;"></div>
-                {"" if es_ultimo else f'<div style="width:2px; flex:1; min-height:32px; background:linear-gradient({color},{linea_color}); margin:4px 0;"></div>'}
-              </div>
-              <div style="padding-bottom:{"0" if es_ultimo else "18px"}; flex:1;">
-                <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
-                  <span style="font-size:0.62rem; font-weight:700; letter-spacing:2px; color:{color};
-                      border:1px solid {color}55; border-radius:99px; padding:2px 8px; background:{color}15;">{tiempo}</span>
-                  <span style="font-size:0.85rem; font-weight:600; color:#F0FDFA;">{titulo}</span>
-                </div>
-                <div style="font-size:0.8rem; color:rgba(240,253,250,0.5); line-height:1.5;">{desc}</div>
-              </div>
-            </div>"""
-
-        tl_height = 80 + len(timeline_pasos) * 72
+        tl_h = 72 + len(tl_pasos) * 68
         components.html(f"""
-        <style>
-          body {{ margin:0; padding:0; background:transparent; font-family:'DM Sans',sans-serif; }}
-        </style>
-        <div style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.07);
-            border-radius:18px; padding:22px 24px;">
-          <div style="font-size:0.6rem; font-weight:700; letter-spacing:3px; text-transform:uppercase;
-              color:rgba(240,253,250,0.35); margin-bottom:18px;">
-            &#9201; Progresión clínica sin tratamiento adecuado
-          </div>
-          {pasos_html}
-        </div>
-        """, height=tl_height, scrolling=False)
+<style>body{{margin:0;padding:0;background:transparent;font-family:'DM Sans',sans-serif;}}</style>
+<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);
+    border-radius:16px;padding:20px 22px;">
+  <div style="font-size:0.58rem;font-weight:700;letter-spacing:3px;text-transform:uppercase;
+      color:rgba(240,253,250,0.3);margin-bottom:16px;">
+    ⏱ Progresión clínica sin tratamiento adecuado
+  </div>
+  {tl_html}
+</div>
+""", height=tl_h, scrolling=False)
 
-   # ══════════════════════════════════════════════════════════
-    # MEGAZORD 4 — DESESCALADA NARRATIVA (Ficha Educativa)
-    # Visible en pantalla para el médico, QR en PDF para paciente
-    # ══════════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════
+    # BLOQUE 4 — SEMÁFORO AMR
+    # ══════════════════════════════════════════════════════════════
+    AMR_DATA = {
+        "faringitis": {
+            "titulo": "Resistencia AMR · Patógenos IRA Alta · Noreste MX",
+            "fuente": "Red PUCRA 2024 · SIREVA II OPS · Hospital Universitario Monterrey",
+            "patogenos": [
+                {"nombre":"S. pyogenes (Estreptococo A)","abx":"Amoxicilina",   "resistencia":2,  "nivel":"BAJA", "color":"#22C55E","nota":"Primera línea segura. Sin resistencia clínica significativa."},
+                {"nombre":"S. pyogenes (Estreptococo A)","abx":"Macrólidos",    "resistencia":18, "nivel":"MEDIA","color":"#F59E0B","nota":"Resistencia a macrólidos en aumento. Usar solo en alérgicos a penicilina."},
+                {"nombre":"S. pneumoniae",               "abx":"Penicilina",    "resistencia":22, "nivel":"MEDIA","color":"#F59E0B","nota":"Resistencia intermedia 15-30% según SIREVA II México 2024."},
+            ]},
+        "neumonia": {
+            "titulo": "Resistencia AMR · Neumonía Comunitaria · Noreste MX",
+            "fuente": "Red PUCRA 2024 · Hospital Universitario NL · InDRE",
+            "patogenos": [
+                {"nombre":"S. pneumoniae","abx":"Amoxicilina",      "resistencia":12,"nivel":"BAJA", "color":"#22C55E","nota":"Primera línea efectiva para NAC ambulatoria en la región."},
+                {"nombre":"S. pneumoniae","abx":"Macrólidos",       "resistencia":31,"nivel":"ALTA", "color":"#EF4444","nota":"Alta resistencia. Evitar monoterapia con azitromicina en NAC."},
+                {"nombre":"H. influenzae","abx":"Ampicilina",       "resistencia":24,"nivel":"MEDIA","color":"#F59E0B","nota":"Beta-lactamasas en aumento. Preferir Amox/Clav."},
+                {"nombre":"K. pneumoniae","abx":"Cefalosporinas 3G","resistencia":38,"nivel":"ALTA", "color":"#EF4444","nota":"BLEE 36% según PUCRA 2024. Considerar carbapenem si sospecha."},
+            ]},
+        "oma": {
+            "titulo": "Resistencia AMR · Otitis Media Aguda · Noreste MX",
+            "fuente": "Consenso SEIP 2023 · SIREVA II · Datos NL/Coahuila",
+            "patogenos": [
+                {"nombre":"S. pneumoniae", "abx":"Amoxicilina","resistencia":15,"nivel":"BAJA", "color":"#22C55E","nota":"Primera línea efectiva a dosis altas."},
+                {"nombre":"H. influenzae", "abx":"Amoxicilina","resistencia":22,"nivel":"MEDIA","color":"#F59E0B","nota":"Beta-lactamasas ~16%. Si falla: Amox/Clav."},
+                {"nombre":"M. catarrhalis","abx":"Amoxicilina","resistencia":75,"nivel":"ALTA", "color":"#EF4444","nota":"Alta resistencia intrínseca. Sensible a Amox/Clav y TMP-SMX."},
+            ]},
+        "sinusitis": {
+            "titulo": "Resistencia AMR · Rinosinusitis Bacteriana · Noreste MX",
+            "fuente": "Guías IDSA 2012 · PRAN México · PUCRA Tamaulipas/NL",
+            "patogenos": [
+                {"nombre":"S. pneumoniae","abx":"Amoxicilina","resistencia":18,"nivel":"BAJA", "color":"#22C55E","nota":"Primera línea IDSA. Efectiva en 80% de sinusitis bacteriana."},
+                {"nombre":"S. pneumoniae","abx":"Macrólidos", "resistencia":35,"nivel":"ALTA", "color":"#EF4444","nota":"Alta resistencia en México. NO usar como monoterapia."},
+                {"nombre":"H. influenzae","abx":"Ampicilina", "resistencia":24,"nivel":"MEDIA","color":"#F59E0B","nota":"Si falla amoxicilina 72h: Amox/Clav o fluoroquinolona."},
+            ]},
+    }
+    amr = AMR_DATA.get(patologia, AMR_DATA["faringitis"])
+    barras_html = ""
+    for pat in amr["patogenos"]:
+        r = pat["resistencia"]; col_r = pat["color"]
+        barras_html += f"""
+<div style="margin-bottom:16px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+    <div>
+      <span style="font-size:0.8rem;font-weight:600;color:#F0FDFA;">{pat['nombre']}</span>
+      <span style="font-size:0.7rem;color:rgba(240,253,250,0.35);margin-left:7px;">vs {pat['abx']}</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:7px;">
+      <span style="font-size:0.6rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+          color:{col_r};border:1px solid {col_r}55;border-radius:99px;
+          padding:2px 8px;background:{col_r}15;">{pat['nivel']}</span>
+      <span style="font-family:'DM Serif Display',serif;font-size:1.05rem;color:{col_r};font-weight:700;">{r}%</span>
+    </div>
+  </div>
+  <div style="width:100%;height:5px;background:rgba(255,255,255,0.07);border-radius:99px;overflow:hidden;margin-bottom:4px;">
+    <div style="width:{r}%;height:100%;background:linear-gradient(to right,{col_r}88,{col_r});border-radius:99px;"></div>
+  </div>
+  <div style="font-size:0.7rem;color:rgba(240,253,250,0.35);line-height:1.4;">{pat['nota']}</div>
+</div>"""
+
+    amr_h = 110 + len(amr["patogenos"]) * 80
+    components.html(f"""
+<style>body{{margin:0;padding:0;background:transparent;font-family:'DM Sans',sans-serif;}}</style>
+<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);
+    border-radius:16px;padding:20px 22px;margin-top:16px;">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;
+      margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+    <div>
+      <div style="font-size:0.58rem;font-weight:700;letter-spacing:3px;text-transform:uppercase;
+          color:rgba(240,253,250,0.3);margin-bottom:4px;">&#129440; Semaforo de Resistencia Antimicrobiana</div>
+      <div style="font-size:0.95rem;color:#F0FDFA;font-weight:600;">{amr["titulo"]}</div>
+    </div>
+    <div style="text-align:right;">
+      <div style="font-size:0.55rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+          color:#14B8A6;border:1px solid rgba(13,148,136,0.35);border-radius:99px;
+          padding:3px 9px;background:rgba(13,148,136,0.08);display:inline-block;margin-bottom:4px;">
+        Demo · SINAVE-Ready
+      </div>
+      <div style="font-size:0.6rem;color:rgba(240,253,250,0.28);line-height:1.4;">{amr["fuente"]}</div>
+    </div>
+  </div>
+  <div style="display:flex;gap:7px;margin-bottom:16px;flex-wrap:wrap;">
+    <span style="font-size:0.58rem;font-weight:700;padding:3px 9px;border-radius:99px;
+        background:rgba(34,197,94,0.12);color:#22C55E;border:1px solid rgba(34,197,94,0.35);">&#9679; BAJA &lt;20%</span>
+    <span style="font-size:0.58rem;font-weight:700;padding:3px 9px;border-radius:99px;
+        background:rgba(245,158,11,0.12);color:#F59E0B;border:1px solid rgba(245,158,11,0.35);">&#9679; MEDIA 20-34%</span>
+    <span style="font-size:0.58rem;font-weight:700;padding:3px 9px;border-radius:99px;
+        background:rgba(239,68,68,0.12);color:#EF4444;border:1px solid rgba(239,68,68,0.35);">&#9679; ALTA &ge;35%</span>
+  </div>
+  {barras_html}
+  <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.05);
+      font-size:0.62rem;color:rgba(240,253,250,0.2);line-height:1.4;">
+    Datos basados en evidencia (demo). Arquitectura lista para API REST SINAVE/InDRE · Fase 3 roadmap SITRE.
+  </div>
+</div>
+""", height=amr_h, scrolling=False)
+
+    # ══════════════════════════════════════════════════════════════
+    # BLOQUE 5 — FICHA EDUCATIVA DEL PACIENTE (colapsable)
+    # ══════════════════════════════════════════════════════════════
     ficha = get_ficha(patologia, tipo, folio, fecha_str, nombre_pat_display)
-    color_ficha   = ficha["color_hero"]
-    accent_ficha  = ficha["color_accent"]
+    color_ficha  = ficha["color_hero"]
+    accent_ficha = ficha["color_accent"]
+    badge_color  = "#3B82F6" if tipo == "viral" else "#22C55E" if tipo == "bacteriana" else "#F59E0B"
+    badge_label  = "VIRAL — Sin antibiótico" if tipo == "viral" else "BACTERIANA — Con antibiótico" if tipo == "bacteriana" else "SEGUIMIENTO"
 
-    # ── Vista previa para el médico (colapsable) ──
-    es_viral_o_sin_abx = tipo in ("viral", "gris")
-
-    # Construir preview de pasos
-    preview_steps = "".join(f"""
-<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
-<span style="font-size:1.1rem;flex-shrink:0;">{em}</span>
-<span style="font-size:0.82rem;color:rgba(240,253,250,0.75);line-height:1.45;">{tx}</span>
-</div>""" for em, tx in ficha.get("que_hacer", []))
-
-    alarmas_preview = "".join(f"""
-<div style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
-<span style="color:#F59E0B;font-size:0.75rem;flex-shrink:0;margin-top:1px;">&#9888;</span>
-<span style="font-size:0.8rem;color:rgba(240,253,250,0.7);">{a}</span>
-</div>""" for a in ficha.get("cuando_regresar", []))
-
-    badge_color = "#3B82F6" if tipo == "viral" else "#22C55E" if tipo == "bacteriana" else "#F59E0B"
-    badge_label = "VIRAL — Sin antibiótico" if tipo == "viral" else "BACTERIANA — Con antibiótico" if tipo == "bacteriana" else "SEGUIMIENTO"
+    preview_steps = "".join(
+        f'<div style="display:flex;align-items:flex-start;gap:10px;padding:7px 0;'
+        f'border-bottom:1px solid rgba(255,255,255,0.04);">'
+        f'<span style="font-size:1rem;flex-shrink:0;">{em}</span>'
+        f'<span style="font-size:0.8rem;color:rgba(240,253,250,0.72);line-height:1.4;">{tx}</span>'
+        f'</div>'
+        for em, tx in ficha.get("que_hacer", [])
+    )
+    alarmas_preview = "".join(
+        f'<div style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;'
+        f'border-bottom:1px solid rgba(255,255,255,0.04);">'
+        f'<span style="color:#F59E0B;font-size:0.72rem;flex-shrink:0;margin-top:1px;">⚠</span>'
+        f'<span style="font-size:0.78rem;color:rgba(240,253,250,0.65);">{a}</span>'
+        f'</div>'
+        for a in ficha.get("cuando_regresar", [])
+    )
+    alarmas_section = (
+        f'<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(239,68,68,0.2);'
+        f'border-radius:12px;padding:13px 15px;margin-bottom:10px;">'
+        f'<div style="font-size:0.58rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;'
+        f'color:#EF4444;margin-bottom:4px;">&#128680; Regresar al médico si:</div>'
+        f'{alarmas_preview}</div>'
+        if ficha.get("cuando_regresar") else ""
+    )
 
     st.markdown(f"""
 <style>
-details.m4-details {{ background:transparent; margin-bottom: 20px; }}
-details.m4-details summary {{ display:flex; align-items:center; justify-content:space-between; cursor:pointer; padding:16px 20px; border-radius:14px; background:rgba(255,255,255,0.02); border:1px solid {color_ficha}33; transition:background 0.2s; list-style:none; }}
-details.m4-details summary::-webkit-details-marker {{ display:none; }}
-details.m4-details summary:hover {{ background:{color_ficha}0A; }}
-details.m4-details[open] summary {{ border-bottom-left-radius:0; border-bottom-right-radius:0; border-bottom-color:transparent; }}
-.m4-body {{ padding-top:10px; animation:fadeIn 0.3s ease; }}
-@keyframes fadeIn{{from{{opacity:0;transform:translateY(-6px)}}to{{opacity:1;transform:translateY(0)}}}}
-details.m4-details .chevron {{ transition:transform 0.3s; color:{accent_ficha}; font-size:0.75rem; }}
-details.m4-details[open] .chevron {{ transform:rotate(180deg); }}
-.sec {{ background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:12px; padding:14px 16px; margin-bottom:10px; }}
+details.m4 {{ background:transparent; margin-bottom:18px; max-width:980px; margin-left:auto; margin-right:auto; }}
+details.m4 summary {{ display:flex;align-items:center;justify-content:space-between;
+    cursor:pointer;padding:14px 18px;border-radius:14px;
+    background:rgba(255,255,255,0.02);border:1px solid {color_ficha}30;
+    transition:background .2s;list-style:none; }}
+details.m4 summary::-webkit-details-marker {{ display:none; }}
+details.m4 summary:hover {{ background:{color_ficha}0A; }}
+details.m4[open] summary {{ border-bottom-left-radius:0;border-bottom-right-radius:0;border-bottom-color:transparent; }}
+details.m4 .chev4 {{ transition:transform .3s;color:{accent_ficha};font-size:.75rem; }}
+details.m4[open] .chev4 {{ transform:rotate(180deg); }}
+.m4body {{ padding-top:8px;animation:fadeIn .3s ease; }}
+.m4sec {{ background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);
+          border-radius:12px;padding:13px 15px;margin-bottom:10px; }}
 </style>
-
-<details class="m4-details">
-<summary>
-<div style="display:flex;align-items:center;gap:14px;">
-<span style="font-size:1.6rem;">{ficha['emoji_hero']}</span>
-<div>
-<div style="font-size:0.6rem;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:{accent_ficha};margin-bottom:3px;">
-&#128218; Megazord 4 · Desescalada Narrativa · Ficha del Paciente
-</div>
-<div style="font-size:0.9rem;color:#F0FDFA;font-weight:600;">{ficha['titulo']}</div>
-<div style="font-size:0.75rem;color:rgba(240,253,250,0.5);margin-top:2px;">{ficha['subtitulo']}</div>
-</div>
-</div>
-<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-<span style="font-size:0.58rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:{badge_color};border:1px solid {badge_color}44;border-radius:99px;padding:3px 10px;background:{badge_color}11;">{badge_label}</span>
-<span class="chevron">&#9660;</span>
-</div>
-</summary>
-
-<div class="m4-body">
-<div class="sec" style="border-color:{color_ficha}33;background:{color_ficha}09;">
-<div style="font-size:0.62rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:{accent_ficha};margin-bottom:8px;">&#128172; {ficha.get('mito_titulo','Explicación para el paciente')}</div>
-<div style="font-size:0.82rem;color:rgba(240,253,250,0.72);line-height:1.6;margin-bottom:10px;">{ficha.get('mito_cuerpo','')}</div>
-<div style="display:flex;align-items:flex-start;gap:8px;background:rgba(255,255,255,0.04);border-radius:8px;padding:8px 10px;">
-<span style="font-size:0.9rem;flex-shrink:0;">&#127757;</span>
-<span style="font-size:0.7rem;color:rgba(240,253,250,0.4);line-height:1.45;">{ficha.get('dato_oms','')}</span>
-</div>
-</div>
-
-<div class="sec">
-<div style="font-size:0.62rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:{accent_ficha};margin-bottom:4px;">&#128138; Qué hacer hoy</div>
-{preview_steps}
-</div>
-
-{"" if not ficha.get('cuando_regresar') else f'''<div class="sec" style="border-color:rgba(239,68,68,0.2);">
-<div style="font-size:0.62rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#EF4444;margin-bottom:4px;">&#128680; Regresar al medico si:</div>
-{alarmas_preview}
-</div>'''}
-
-<div style="background:{color_ficha}12;border:1px solid {color_ficha}33;border-radius:12px;padding:14px 16px;margin-bottom:10px;text-align:center;">
-<div style="font-size:0.82rem;color:rgba(240,253,250,0.75);line-height:1.55;font-style:italic;">"{ficha['mensaje_final']}"</div>
-</div>
-
-<div style="font-size:0.62rem;color:rgba(240,253,250,0.25);text-align:center;margin-bottom:4px;">
-Esta ficha se incluye en el PDF como segunda pagina para entregar al paciente.<br>
-El QR del PDF enlaza a la version movil completa.
-</div>
-</div>
+<details class="m4">
+  <summary>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span style="font-size:1.4rem;">{ficha['emoji_hero']}</span>
+      <div>
+        <div style="font-size:0.58rem;font-weight:700;letter-spacing:3px;text-transform:uppercase;
+            color:{accent_ficha};margin-bottom:2px;">Ficha Educativa · Desescalada Narrativa</div>
+        <div style="font-size:0.88rem;color:#F0FDFA;font-weight:600;">{ficha['titulo']}</div>
+        <div style="font-size:0.73rem;color:rgba(240,253,250,0.45);margin-top:1px;">{ficha['subtitulo']}</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:7px;flex-shrink:0;">
+      <span style="font-size:0.56rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
+          color:{badge_color};border:1px solid {badge_color}44;border-radius:99px;
+          padding:3px 9px;background:{badge_color}10;">{badge_label}</span>
+      <span class="chev4">▾</span>
+    </div>
+  </summary>
+  <div class="m4body">
+    <div class="m4sec" style="border-color:{color_ficha}30;background:{color_ficha}08;">
+      <div style="font-size:0.58rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+          color:{accent_ficha};margin-bottom:7px;">&#128172; {ficha.get('mito_titulo','')}</div>
+      <div style="font-size:0.8rem;color:rgba(240,253,250,0.7);line-height:1.55;margin-bottom:9px;">
+        {ficha.get('mito_cuerpo','')}</div>
+      <div style="display:flex;align-items:flex-start;gap:7px;background:rgba(255,255,255,0.04);
+          border-radius:8px;padding:7px 10px;">
+        <span style="font-size:0.85rem;flex-shrink:0;">&#127757;</span>
+        <span style="font-size:0.68rem;color:rgba(240,253,250,0.38);line-height:1.4;">
+          {ficha.get('dato_oms','')}</span>
+      </div>
+    </div>
+    <div class="m4sec">
+      <div style="font-size:0.58rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+          color:{accent_ficha};margin-bottom:4px;">&#128138; Qué hacer hoy</div>
+      {preview_steps}
+    </div>
+    {alarmas_section}
+    <div style="background:{color_ficha}10;border:1px solid {color_ficha}30;border-radius:12px;
+        padding:13px 15px;text-align:center;margin-bottom:8px;">
+      <div style="font-size:0.8rem;color:rgba(240,253,250,0.7);line-height:1.5;font-style:italic;">
+        "{ficha['mensaje_final']}"</div>
+    </div>
+    <div style="font-size:0.6rem;color:rgba(240,253,250,0.22);text-align:center;">
+      Segunda página del PDF · QR con versión móvil para el paciente
+    </div>
+  </div>
 </details>
 """, unsafe_allow_html=True)
-    # ── ANTIBIOTIC TIME-OUT 48H ────────────────────────────────────────────────
+
+    # ══════════════════════════════════════════════════════════════
+    # BLOQUE 6 — ANTIBIOTIC TIME-OUT 48H (si aplica)
+    # ══════════════════════════════════════════════════════════════
     TIMEOUT_48H = {
         "faringitis": {
             "bacteriana": {
@@ -1891,23 +2087,21 @@ El QR del PDF enlaza a la version movil completa.
                     "Tolera líquidos y semisólidos sin dificultad",
                     "Estado general y energía en recuperación",
                 ],
-                "alerta": "⚠️ Completar 10 días aunque mejore antes — riesgo de fiebre reumática si se interrumpe.",
+                "alerta": "⚠️ Completar 10 días aunque mejore — riesgo de fiebre reumática si se interrumpe.",
                 "mejoro": {
-                    "color": "#22C55E",
-                    "titulo": "Curso Completo Obligatorio",
-                    "cuerpo": "Completar los 10 días de amoxicilina es mandatorio en faringitis estreptocócica aunque el paciente se sienta bien. La suspensión prematura incrementa el riesgo de fiebre reumática aguda con carditis.",
-                    "accion": "Continuar amoxicilina hasta completar el ciclo. Reforzar adherencia con el paciente.",
+                    "color": "#22C55E", "titulo": "Curso Completo Obligatorio",
+                    "cuerpo": "Completar los 10 días de amoxicilina es mandatorio. La suspensión prematura incrementa el riesgo de fiebre reumática aguda con carditis.",
+                    "accion": "Continuar amoxicilina hasta completar el ciclo.",
                     "stewardship": "En estreptococo: el stewardship correcto es completar el ciclo, no suspenderlo.",
                 },
                 "no_mejoro": {
-                    "color": "#EF4444",
-                    "titulo": "Sin Mejoría — Escalar a 48h",
-                    "causas": ["Resistencia si se usó macrólido", "Mononucleosis infecciosa", "Absceso periamigdalino", "Adherencia deficiente"],
+                    "color": "#EF4444", "titulo": "Sin Mejoría — Escalar a 48h",
+                    "causas": ["Resistencia si se usó macrólido","Mononucleosis infecciosa","Absceso periamigdalino","Adherencia deficiente"],
                     "acciones": [
-                        "Tomar cultivo faríngeo si no se realizó inicialmente",
-                        "Si recibió azitromicina → cambiar a amoxicilina 500 mg c/8h",
-                        "Descartar absceso periamigdalino: trismus, voz engolada, desviación uvular",
-                        "Derivar a ORL si persiste > 5 días sin respuesta",
+                        "Cultivo faríngeo si no se realizó",
+                        "Si recibió azitromicina → cambiar a amoxicilina 500mg c/8h",
+                        "Descartar absceso: trismus, voz engolada, desviación uvular",
+                        "Derivar a ORL si persiste >5 días sin respuesta",
                     ],
                     "alternativa": "Amoxicilina-Clavulanato 875/125 mg c/12h × 10 días",
                 },
@@ -1916,559 +2110,266 @@ El QR del PDF enlaza a la version movil completa.
         "neumonia": {
             "viral": {
                 "horas": "48h",
-                "criterios": [
-                    "FR < 24 rpm",
-                    "Temperatura < 37.8 °C o en descenso sostenido",
-                    "SpO₂ ≥ 94 % en aire ambiente",
-                    "Tolerancia oral y mejoría subjetiva del esfuerzo respiratorio",
-                ],
-                "alerta": "CURB-65 0–1: manejo ambulatorio con control obligatorio a 48h.",
+                "criterios": ["FR < 24 rpm","Temperatura < 37.8 °C","SpO₂ ≥ 94 % aire ambiente","Mejoría del esfuerzo respiratorio"],
+                "alerta": "CURB-65 0–1: ambulatorio con control obligatorio a 48h.",
                 "mejoro": {
-                    "color": "#22C55E",
-                    "titulo": "Completar Ciclo · 5–7 días",
-                    "cuerpo": "Buena respuesta clínica. Completar antibiótico oral 5–7 días. Rx de control en 4–6 semanas para confirmar resolución.",
-                    "accion": "Completar ciclo. Ciclos cortos de 5 días son equivalentes en NAC leve (IDSA/ATS 2019).",
+                    "color": "#22C55E", "titulo": "Completar Ciclo · 5–7 días",
+                    "cuerpo": "Buena respuesta. Completar antibiótico oral 5–7 días. Rx control en 4–6 semanas.",
+                    "accion": "Completar ciclo. Ciclos cortos de 5 días equivalentes en NAC leve (IDSA/ATS 2019).",
                     "stewardship": "Ciclos cortos reducen presión selectiva y efectos adversos.",
                 },
                 "no_mejoro": {
-                    "color": "#EF4444",
-                    "titulo": "Hospitalización Inmediata a 48h",
-                    "causas": ["Organismo resistente o atípico", "Derrame pleural / empiema", "CURB-65 subestimado", "Diagnóstico incorrecto"],
+                    "color": "#EF4444", "titulo": "Hospitalización a 48h",
+                    "causas": ["Organismo resistente","Derrame pleural","CURB-65 subestimado","Diagnóstico incorrecto"],
                     "acciones": [
                         "Hospitalizar — recalcular CURB-65",
-                        "Hemocultivos × 2 antes de escalar antibiótico",
+                        "Hemocultivos antes de escalar",
                         "Rx tórax o TAC para descartar complicaciones",
-                        "Ampliar: Amoxicilina-Clavulanato + Macrólido o Levofloxacino 500 mg/día",
+                        "Ampliar: Amox/Clav + Macrólido o Levofloxacino 500mg/día",
                     ],
-                    "alternativa": "Levofloxacino 500 mg c/24h VO/IV o Ceftriaxona 1g/día IV + Azitromicina 500 mg/día",
+                    "alternativa": "Levofloxacino 500mg c/24h VO/IV o Ceftriaxona 1g/día IV + Azitromicina",
                 },
             },
             "bacteriana": {
                 "horas": "48h",
-                "criterios": [
-                    "FR < 24 rpm",
-                    "Temperatura < 37.8 °C o en descenso",
-                    "SpO₂ ≥ 94 % en aire ambiente",
-                    "Mejoría de confusión y estado general",
-                ],
+                "criterios": ["FR < 24 rpm","Temperatura < 37.8 °C","SpO₂ ≥ 94 % aire ambiente","Mejoría estado general"],
                 "alerta": "CURB-65 2: umbral bajo de hospitalización. Si no mejora a 48h, ingresar.",
                 "mejoro": {
-                    "color": "#22C55E",
-                    "titulo": "Continuar + Step-Down Oral",
-                    "cuerpo": "Respuesta adecuada. Si hospitalizado con IV: paso a vía oral equivalente a las 48–72h. Completar 5–7 días totales.",
-                    "accion": "Step-down oral precoz si tolera vía oral. Alta hospitalaria anticipada.",
-                    "stewardship": "Step-down precoz reduce días de hospitalización y selección de resistencias.",
+                    "color": "#22C55E", "titulo": "Step-Down Oral a 48h",
+                    "cuerpo": "Respuesta adecuada. Si hospitalizado con IV: paso a vía oral a 48–72h. Completar 5–7 días.",
+                    "accion": "Step-down oral precoz. Alta: afebril 24h + FR normal + SpO₂ ≥ 94 %.",
+                    "stewardship": "Step-down IV→VO precoz reduce costos y selección de resistencias.",
                 },
                 "no_mejoro": {
-                    "color": "#EF4444",
-                    "titulo": "Escalar — Sin Respuesta a 48h",
-                    "causas": ["S. pneumoniae resistente", "Organismo atípico no cubierto", "Derrame pleural", "Empiema"],
+                    "color": "#EF4444", "titulo": "Escalar — Sin Respuesta a 48h",
+                    "causas": ["S. pneumoniae resistente","Organismo atípico","Derrame pleural","Empiema"],
                     "acciones": [
                         "Hospitalización si aún ambulatorio",
                         "Hemocultivos + esputo antes de cambio",
                         "TAC tórax con contraste",
-                        "Ampliar: Levofloxacino 750 mg/día o Ceftriaxona + Macrólido IV",
+                        "Ampliar: Levofloxacino 750mg/día o Ceftriaxona + Macrólido IV",
                     ],
-                    "alternativa": "Levofloxacino 750 mg/día VO/IV × 5 días o Ceftriaxona 1–2g/día IV",
+                    "alternativa": "Levofloxacino 750mg/día VO/IV × 5 días o Ceftriaxona 1–2g/día IV",
                 },
             },
             "urgencia": {
                 "horas": "24–48h (hospitalizado)",
-                "criterios": [
-                    "TAS ≥ 90 mmHg sin vasopresores",
-                    "FR < 30 rpm",
-                    "SpO₂ ≥ 90 % con O₂ suplementario",
-                    "Resolución de confusión si estaba presente",
-                ],
-                "alerta": "Paciente hospitalizado. Evaluación por internista/neumólogo en < 24h obligatoria.",
+                "criterios": ["TAS ≥ 90 mmHg sin vasopresores","FR < 30 rpm","SpO₂ ≥ 90 % con O₂","Resolución de confusión"],
+                "alerta": "Evaluación por internista/neumólogo en < 24h obligatoria.",
                 "mejoro": {
-                    "color": "#22C55E",
-                    "titulo": "Step-Down Oral a 48–72h",
-                    "cuerpo": "Si mejoría clínica y tolerancia oral: paso a antibiótico oral equivalente. Completar 5–7 días totales. Alta si PORT/PSI bajo.",
+                    "color": "#22C55E", "titulo": "Step-Down Oral a 48–72h",
+                    "cuerpo": "Si mejoría y tolerancia oral: paso a VO equivalente. Completar 5–7 días. Alta si PORT/PSI bajo.",
                     "accion": "Step-down a VO. Alta: afebril 24h + FR normal + SpO₂ ≥ 94 % aire ambiente.",
-                    "stewardship": "Step-down IV→VO precoz reduce costos, riesgo de catéter y días de hospitalización.",
+                    "stewardship": "Step-down IV→VO precoz reduce días de hospitalización.",
                 },
                 "no_mejoro": {
-                    "color": "#EF4444",
-                    "titulo": "Escalada — Sin Respuesta a 24–48h",
-                    "causas": ["Organismo MDR / BLEE", "Neumonía necrotizante", "Sepsis no controlada", "Empiema / Absceso"],
+                    "color": "#EF4444", "titulo": "Escalada — Sin Respuesta 24–48h",
+                    "causas": ["Organismo MDR/BLEE","Neumonía necrotizante","Sepsis no controlada","Empiema"],
                     "acciones": [
-                        "Cultivos completos (sangre, esputo, BAL si intubado)",
+                        "Cultivos completos (sangre, esputo, BAL)",
                         "Ampliar a carbapenem si sospecha BLEE/Klebsiella MDR",
-                        "Consulta urgente a Infectología",
-                        "TAC tórax con contraste de urgencia",
+                        "Consulta urgente Infectología",
+                        "TAC tórax con contraste urgente",
                     ],
-                    "alternativa": "Meropenem 1g c/8h IV ± Vancomicina 15 mg/kg c/12h si sospecha SARM",
+                    "alternativa": "Meropenem 1g c/8h IV ± Vancomicina 15mg/kg c/12h si sospecha SARM",
                 },
             },
         },
         "oma": {
             "bacteriana": {
                 "horas": "48–72h",
-                "criterios": [
-                    "Otalgia reducida ≥ 50 % (EVA ≤ 4/10)",
-                    "Temperatura < 37.5 °C",
-                    "Irritabilidad (niños) notoriamente mejorada",
-                    "Otorrea reducida si existía",
-                ],
-                "alerta": "En < 2 años: umbral muy bajo para hospitalización si no mejora a 48h.",
+                "criterios": ["Otalgia reducida ≥ 50 %","Temperatura < 37.5 °C","Irritabilidad mejorada","Otorrea reducida"],
+                "alerta": "En < 2 años: umbral muy bajo para hospitalización si no mejora.",
                 "mejoro": {
-                    "color": "#22C55E",
-                    "titulo": "Completar Ciclo (5–10 días)",
-                    "cuerpo": "Buena respuesta. En niños ≥ 2 años con OMA no grave: 5–7 días. En < 2 años o grave: 10 días. Control audiológico post-tratamiento.",
-                    "accion": "Continuar amoxicilina. Ciclos cortos en ≥ 2 años son equivalentes a 10 días (Cochrane 2022).",
-                    "stewardship": "OMA no grave ≥ 2 años: ciclos de 5–7d equivalentes a 10d con menos resistencia.",
+                    "color": "#22C55E", "titulo": "Completar Ciclo (5–10 días)",
+                    "cuerpo": "Buena respuesta. En ≥ 2 años no grave: 5–7 días. En < 2 años o grave: 10 días.",
+                    "accion": "Continuar amoxicilina. Control audiológico post-tratamiento.",
+                    "stewardship": "OMA no grave ≥ 2 años: ciclos cortos equivalentes a 10d con menos resistencia.",
                 },
                 "no_mejoro": {
-                    "color": "#EF4444",
-                    "titulo": "Escalar — Sin Mejoría a 72h",
-                    "causas": ["H. influenzae beta-lactamasa + (~22%)", "M. catarrhalis resistente (~75%)", "Otitis complicada"],
+                    "color": "#EF4444", "titulo": "Escalar — Sin Mejoría 72h",
+                    "causas": ["H. influenzae beta-lactamasa+ (~22%)","M. catarrhalis resistente (~75%)","Otitis complicada"],
                     "acciones": [
-                        "Cambiar a Amoxicilina-Clavulanato 90/6.4 mg/kg/día c/12h",
+                        "Cambiar a Amox/Clav 90/6.4 mg/kg/día c/12h",
                         "Descartar mastoiditis: dolor retroauricular, pabellón desplazado",
                         "Timpanocentesis si < 2 años con fiebre persistente",
-                        "Derivar a ORL si es el 3er episodio en 6 meses",
+                        "Derivar a ORL si 3er episodio en 6 meses",
                     ],
                     "alternativa": "Amoxicilina-Clavulanato 90/6.4 mg/kg/día c/12h × 10 días",
-                },
-            },
-            "gris": {
-                "horas": "48–72h (observación activa)",
-                "criterios": [
-                    "Otalgia reducida espontáneamente",
-                    "Ausencia de fiebre persistente",
-                    "Sin empeoramiento de síntomas",
-                    "Niño tranquilo, tolerando bien",
-                ],
-                "alerta": "Período de observación activa SIN antibiótico. Iniciar si cualquier criterio empeora.",
-                "mejoro": {
-                    "color": "#22C55E",
-                    "titulo": "Confirmar — No Requirió Antibiótico",
-                    "cuerpo": "OMA probable resuelta espontáneamente. La observación activa evitó un antibiótico innecesario. Vigilar 1 semana adicional.",
-                    "accion": "No iniciar antibiótico. Control en 1 semana. Reforzar vacunación.",
-                    "stewardship": "Observación activa reduce prescripción en ~30 % de OMA probable (AAP 2013).",
-                },
-                "no_mejoro": {
-                    "color": "#F59E0B",
-                    "titulo": "Iniciar Antibiótico a 48–72h",
-                    "causas": ["OMA bacteriana confirmada por evolución", "Fiebre persistente > 48h", "Empeoramiento del dolor"],
-                    "acciones": [
-                        "Iniciar amoxicilina 90 mg/kg/día (dosis alta) × 10 días",
-                        "Si fiebre > 39 °C o bilateral: Amoxicilina-Clavulanato de entrada",
-                        "En alérgicos: Azitromicina o Cefdinir",
-                    ],
-                    "alternativa": "Amoxicilina 90 mg/kg/día c/8h × 10 días (dosis alta para neumococo resistente)",
                 },
             },
         },
         "sinusitis": {
             "bacteriana": {
                 "horas": "72h",
-                "criterios": [
-                    "Descarga nasal menos espesa o reducida",
-                    "Dolor / presión facial reducido ≥ 50 %",
-                    "Fiebre resuelta si existía",
-                    "Mejoría del estado general",
-                ],
-                "alerta": "Si no mejora en 72h → cambio de antibiótico antes del día 7 (IDSA 2012).",
+                "criterios": ["Descarga nasal reducida","Dolor facial reducido ≥ 50 %","Fiebre resuelta","Mejoría general"],
+                "alerta": "Si no mejora a 72h con amoxicilina: sospechar resistencia o germen atípico.",
                 "mejoro": {
-                    "color": "#22C55E",
-                    "titulo": "Completar Ciclo 5–7 días",
-                    "cuerpo": "Respuesta adecuada a amoxicilina. IDSA 2012 recomienda ciclos de 5–7 días en adultos para reducir presión antibiótica. Agregar irrigación nasal salina.",
-                    "accion": "Completar antibiótico. Considerar budesonida nasal spray si hay componente alérgico.",
-                    "stewardship": "IDSA 2012: ciclos cortos (5–7d) suficientes en sinusitis bacteriana leve-moderada.",
+                    "color": "#22C55E", "titulo": "Completar 7–10 Días",
+                    "cuerpo": "Buena respuesta. Completar ciclo con lavados nasales y corticoide intranasal.",
+                    "accion": "Completar antibiótico. Mantener irrigación nasal 2x/día.",
+                    "stewardship": "No prolongar más de 10 días en sinusitis no complicada.",
                 },
                 "no_mejoro": {
-                    "color": "#EF4444",
-                    "titulo": "Cambio de Antibiótico a 72h",
-                    "causas": ["H. influenzae beta-lactamasa + (~24 %)", "S. pneumoniae resistente", "Diagnóstico incorrecto"],
+                    "color": "#EF4444", "titulo": "Escalar — Sin Respuesta 72h",
+                    "causas": ["H. influenzae beta-lactamasa+","S. pneumoniae resistente penicilina","Sinusitis odontogénica","Anaerobia"],
                     "acciones": [
-                        "Cambiar a Amoxicilina-Clavulanato 875/125 mg c/12h",
-                        "Considerar TAC de senos paranasales",
-                        "Si cefalea intensa o edema facial: urgencias para descartar complicación",
-                        "Derivar a ORL/Alergología si episodio recurrente",
+                        "Cambiar a Amox/Clav 875/125 mg c/12h",
+                        "TAC de senos paranasales si > 10 días sin mejora",
+                        "Derivar ORL si falla 2do antibiótico",
+                        "Cultivo endoscópico de meato medio si disponible",
                     ],
-                    "alternativa": "Amoxicilina-Clavulanato 875/125 mg c/12h × 7 días o Levofloxacino 500 mg/día × 5 días",
-                },
-            },
-            "urgencia": {
-                "horas": "24h (hospitalizado)",
-                "criterios": [
-                    "Edema periorbitario en regresión",
-                    "Sin progresión de síntomas neurológicos",
-                    "Mejoría del estado general y fiebre",
-                ],
-                "alerta": "Complicación orbitaria/intracraneal — evaluación obligatoria por especialista en < 24h.",
-                "mejoro": {
-                    "color": "#22C55E",
-                    "titulo": "Continuar IV + Evaluación ORL",
-                    "cuerpo": "Respuesta inicial al antibiótico IV. Continuar hasta 48h de afebril + mejoría confirmada. Paso a oral según criterio de ORL / Neurocirugía.",
-                    "accion": "Continuar esquema IV. No suspender prematuramente ante mejoría parcial.",
-                    "stewardship": "En complicaciones: ciclo IV completo antes de step-down. No reducir prematuramente.",
-                },
-                "no_mejoro": {
-                    "color": "#EF4444",
-                    "titulo": "Cirugía + Escalada Urgente",
-                    "causas": ["Absceso subperióstico orbitario", "Trombosis del seno cavernoso", "Empiema subdural", "Meningitis"],
-                    "acciones": [
-                        "Consulta urgente ORL + Neurocirugía en < 2h",
-                        "TAC con contraste de urgencia",
-                        "Drenaje quirúrgico si absceso confirmado",
-                        "Ampliar: Ceftriaxona + Metronidazol + Vancomicina IV",
-                    ],
-                    "alternativa": "Ceftriaxona 2g c/12h IV + Metronidazol 500 mg c/8h IV ± Vancomicina 15 mg/kg c/12h",
+                    "alternativa": "Amoxicilina-Clavulanato 875/125 mg c/12h × 10 días o Moxifloxacino 400mg/día",
                 },
             },
         },
     }
 
-    _timeout_aplica = tipo in ["bacteriana", "urgencia"] or (tipo == "gris" and patologia == "oma")
-    if _timeout_aplica and patologia in TIMEOUT_48H and tipo in TIMEOUT_48H[patologia]:
-        tod = TIMEOUT_48H[patologia][tipo]
-        horas_to = tod["horas"]
-        crit_html = "".join([
-            f'<div style="display:flex;align-items:flex-start;gap:10px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);">' +
-            f'<div style="width:7px;height:7px;border-radius:50%;background:#F59E0B;flex-shrink:0;margin-top:6px;"></div>' +
-            f'<span style="font-size:0.82rem;color:rgba(240,253,250,0.75);">{c}</span></div>'
-            for c in tod["criterios"]
-        ])
-        alerta_html = (
-            f'<div style="margin-top:12px;padding:8px 14px;background:rgba(245,158,11,0.08);' +
-            f'border-left:3px solid #F59E0B;border-radius:0 6px 6px 0;font-size:0.75rem;color:#F59E0B;">' +
-            tod["alerta"] + '</div>'
-        ) if tod.get("alerta") else ""
+    if "timeout_48h" not in st.session_state:
+        st.session_state.timeout_48h = None
 
-        st.markdown(f"""
-<div style="max-width:980px;margin:0 auto 8px;background:rgba(245,158,11,0.04);
-    border:1px solid rgba(245,158,11,0.25);border-radius:20px;padding:24px 28px;
-    animation:fade-up 0.5s 0.45s both;">
-  <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
-    <span style="font-size:1.4rem;">&#128336;</span>
-    <div style="flex:1;">
-      <div style="font-size:0.58rem;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#F59E0B;">
-        Antibiotic Time-Out &middot; Revisi&oacute;n Obligatoria {horas_to}
-      </div>
-      <div style="font-size:0.8rem;color:rgba(240,253,250,0.55);margin-top:2px;">
-        Stewardship Antimicrobiano &middot; Ciclo Completo de Atenci&oacute;n
-      </div>
-    </div>
-    <span style="font-size:0.58rem;font-weight:700;padding:4px 12px;border-radius:99px;
-        background:rgba(245,158,11,0.12);color:#F59E0B;border:1px solid rgba(245,158,11,0.3);">
-      &#9679; REVISI&Oacute;N {horas_to.upper()}
-    </span>
-  </div>
-  <div style="font-size:0.6rem;font-weight:700;letter-spacing:3px;text-transform:uppercase;
-      color:rgba(240,253,250,0.35);margin-bottom:8px;">Criterios de mejor&iacute;a esperada</div>
-  {crit_html}
-  {alerta_html}
-  <div style="margin-top:14px;font-size:0.72rem;color:rgba(240,253,250,0.35);font-style:italic;">
-    Simula la revisi&oacute;n a {horas_to} seleccionando el estado del paciente:
-  </div>
-</div>
-        """, unsafe_allow_html=True)
+    tod_map = TIMEOUT_48H.get(patologia, {})
+    tod = tod_map.get(tipo, None)
 
-        col_t1, col_t2 = st.columns(2)
-        with col_t1:
-            if st.button(f"✅  Paciente Mejoró", key="btn_timeout_mejoro", type="primary", use_container_width=True):
-                st.session_state.timeout_48h = "mejoro"
-                st.rerun()
-        with col_t2:
-            if st.button("❌  No Mejoró / Empeoró", key="btn_timeout_no_mejoro", type="primary", use_container_width=True):
-                st.session_state.timeout_48h = "no_mejoro"
-                st.rerun()
+    if tod:
+        with st.expander(f"⏰ Antibiotic Time-Out · Revisión a {tod['horas']}", expanded=False):
+            st.markdown(f"<p style='font-size:0.8rem;color:#F59E0B;margin-bottom:12px;'>{tod['alerta']}</p>", unsafe_allow_html=True)
+            st.markdown("<p style='font-size:0.75rem;color:rgba(240,253,250,0.5);margin-bottom:10px;'>Criterios de mejoría esperada:</p>", unsafe_allow_html=True)
+            for cr in tod["criterios"]:
+                st.markdown(f"<p style='font-size:0.82rem;color:#F0FDFA;margin-bottom:4px;'>  ☐ {cr}</p>", unsafe_allow_html=True)
 
-        _to_state = st.session_state.get("timeout_48h")
-        if _to_state == "mejoro":
-            m = tod["mejoro"]
-            st.markdown(f"""
-<div style="max-width:980px;margin:4px auto 20px;background:rgba(34,197,94,0.05);
-    border:1px solid rgba(34,197,94,0.25);border-radius:16px;padding:22px 26px;animation:fade-up 0.4s both;">
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-    <span style="font-size:1.2rem;">&#9989;</span>
-    <div>
-      <div style="font-size:0.6rem;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:{m['color']};">Resultado &middot; Mejor&iacute;a Confirmada</div>
-      <div style="font-family:'DM Serif Display',serif;font-size:1.1rem;color:#F0FDFA;">{m['titulo']}</div>
-    </div>
-  </div>
-  <div style="font-size:0.88rem;color:rgba(240,253,250,0.7);line-height:1.65;margin-bottom:12px;">{m['cuerpo']}</div>
-  <div style="padding:10px 14px;background:rgba(34,197,94,0.08);border-left:3px solid {m['color']};border-radius:0 6px 6px 0;margin-bottom:10px;">
-    <div style="font-size:0.65rem;font-weight:700;color:{m['color']};margin-bottom:3px;letter-spacing:1px;">ACCI&Oacute;N</div>
-    <div style="font-size:0.82rem;color:#F0FDFA;">{m['accion']}</div>
-  </div>
-  <div style="font-size:0.7rem;color:rgba(240,253,250,0.35);font-style:italic;">&#9679; Stewardship: {m['stewardship']}</div>
-</div>
-            """, unsafe_allow_html=True)
+            st.markdown("<hr style='opacity:0.1;margin:16px 0 14px;'>", unsafe_allow_html=True)
+            _to_state = st.radio("Estado del paciente a las 48–72h:", ["No evaluado aún", "Mejoró", "No mejoró"], horizontal=True, label_visibility="visible")
+            st.session_state.timeout_48h = _to_state
 
-        elif _to_state == "no_mejoro":
-            nm = tod["no_mejoro"]
-            causas_html = "".join([
-                f'<span style="font-size:0.7rem;color:rgba(240,253,250,0.5);display:inline-block;' +
-                f'margin:2px 4px 2px 0;padding:2px 8px;background:rgba(239,68,68,0.1);' +
-                f'border:1px solid rgba(239,68,68,0.2);border-radius:99px;">{c}</span>'
-                for c in nm.get("causas", [])
-            ])
-            _nm_color = nm["color"]
-            acciones_html = "".join([
-                f'<div style="display:flex;align-items:flex-start;gap:10px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);">' +
-                f'<div style="min-width:18px;height:18px;border-radius:50%;background:{_nm_color};display:flex;align-items:center;' +
-                f'justify-content:center;flex-shrink:0;font-size:0.6rem;font-weight:700;color:#fff;">{i+1}</div>' +
-                f'<span style="font-size:0.82rem;color:rgba(240,253,250,0.75);">{a}</span></div>'
-                for i, a in enumerate(nm.get("acciones", []))
-            ])
-            st.markdown(f"""
-<div style="max-width:980px;margin:4px auto 20px;background:rgba(239,68,68,0.05);
-    border:1px solid rgba(239,68,68,0.3);border-radius:16px;padding:22px 26px;animation:fade-up 0.4s both;">
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-    <span style="font-size:1.2rem;">&#9888;&#65039;</span>
-    <div>
-      <div style="font-size:0.6rem;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:{nm['color']};">Escalada &middot; Sin Mejor&iacute;a</div>
-      <div style="font-family:'DM Serif Display',serif;font-size:1.1rem;color:#F0FDFA;">{nm['titulo']}</div>
-    </div>
-  </div>
-  <div style="margin-bottom:14px;">
-    <div style="font-size:0.58rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(240,253,250,0.35);margin-bottom:6px;">Posibles causas</div>
-    {causas_html}
-  </div>
-  <div style="font-size:0.6rem;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:rgba(240,253,250,0.35);margin-bottom:8px;">Plan de escalada</div>
+            if _to_state == "Mejoró":
+                m = tod["mejoro"]
+                st.markdown(f"""
+<div style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.25);
+    border-radius:14px;padding:18px 20px;margin-top:8px;">
+  <div style="font-size:0.58rem;font-weight:700;letter-spacing:3px;text-transform:uppercase;
+      color:{m['color']};margin-bottom:8px;">✓ Buena Respuesta</div>
+  <div style="font-family:'DM Serif Display',serif;font-size:1.05rem;color:#F0FDFA;margin-bottom:10px;">{m['titulo']}</div>
+  <div style="font-size:0.83rem;color:rgba(240,253,250,0.7);line-height:1.5;margin-bottom:10px;">{m['cuerpo']}</div>
+  <div style="font-size:0.78rem;color:{m['color']};margin-bottom:8px;">→ {m['accion']}</div>
+  <div style="font-size:0.7rem;color:rgba(240,253,250,0.4);font-style:italic;">{m['stewardship']}</div>
+</div>""", unsafe_allow_html=True)
+
+            elif _to_state == "No mejoró":
+                nm = tod["no_mejoro"]
+                causas_html = "".join(
+                    f'<span style="font-size:0.68rem;color:rgba(240,253,250,0.5);display:inline-block;'
+                    f'margin:2px 3px;padding:2px 8px;background:rgba(239,68,68,0.1);'
+                    f'border:1px solid rgba(239,68,68,0.2);border-radius:99px;">{c_}</span>'
+                    for c_ in nm.get("causas", [])
+                )
+                acciones_html = "".join(
+                    f'<div style="display:flex;align-items:flex-start;gap:9px;padding:5px 0;'
+                    f'border-bottom:1px solid rgba(255,255,255,0.04);">'
+                    f'<div style="min-width:18px;height:18px;border-radius:50%;background:{nm["color"]};'
+                    f'display:flex;align-items:center;justify-content:center;flex-shrink:0;'
+                    f'font-size:0.58rem;font-weight:700;color:#fff;">{idx+1}</div>'
+                    f'<span style="font-size:0.8rem;color:rgba(240,253,250,0.72);">{a_}</span></div>'
+                    for idx, a_ in enumerate(nm.get("acciones", []))
+                )
+                st.markdown(f"""
+<div style="background:rgba(239,68,68,0.05);border:1px solid rgba(239,68,68,0.28);
+    border-radius:14px;padding:18px 20px;margin-top:8px;">
+  <div style="font-size:0.58rem;font-weight:700;letter-spacing:3px;text-transform:uppercase;
+      color:{nm['color']};margin-bottom:8px;">⚠ Escalada · Sin Mejoría</div>
+  <div style="font-family:'DM Serif Display',serif;font-size:1.05rem;color:#F0FDFA;margin-bottom:10px;">{nm['titulo']}</div>
+  <div style="margin-bottom:10px;"><div style="font-size:0.55rem;font-weight:700;letter-spacing:2px;
+      text-transform:uppercase;color:rgba(240,253,250,0.3);margin-bottom:5px;">Posibles causas</div>{causas_html}</div>
+  <div style="font-size:0.58rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+      color:rgba(240,253,250,0.3);margin-bottom:6px;">Plan de escalada</div>
   {acciones_html}
-  <div style="margin-top:14px;padding:12px 16px;background:rgba(0,0,0,0.2);border:1px solid rgba(239,68,68,0.2);border-radius:10px;font-family:monospace;">
-    <div style="font-size:0.58rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:{nm['color']};margin-bottom:6px;">Alternativa Antibi&oacute;tica</div>
-    <div style="font-size:0.82rem;color:#F0FDFA;">{nm.get('alternativa', '')}</div>
+  <div style="margin-top:12px;padding:11px 14px;background:rgba(0,0,0,0.2);
+      border:1px solid rgba(239,68,68,0.2);border-radius:10px;">
+    <div style="font-size:0.55rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+        color:{nm['color']};margin-bottom:5px;">Alternativa Antibiótica</div>
+    <div style="font-size:0.8rem;color:#F0FDFA;">{nm.get('alternativa','')}</div>
   </div>
-</div>
-            """, unsafe_allow_html=True)
+</div>""", unsafe_allow_html=True)
 
-
-    # ── SEMÁFORO DE RESISTENCIA ANTIMICROBIANA ─────────────────────────
-    # Datos basados en: Red PUCRA 2024 (UNAM), Hospital Universitario Monterrey NL,
-    # SIREVA II OPS/OMS, y guías IDSA/SSA.
-    # Arquitectura lista para conectar a SINAVE/InDRE vía API REST.
-    AMR_DATA = {
-        "faringitis": {
-            "titulo": "Resistencia AMR · Patógenos IRA Alta · Noreste MX",
-            "fuente": "Red PUCRA 2024 · SIREVA II OPS · Hospital Universitario Monterrey",
-            "patogenos": [
-                {"nombre": "S. pyogenes (Estreptococo A)",  "abx": "Amoxicilina",   "resistencia": 2,  "nivel": "BAJA",   "color": "#22C55E", "nota": "Primera línea segura. Sin resistencia clínica significativa reportada."},
-                {"nombre": "S. pyogenes (Estreptococo A)",  "abx": "Macrólidos",    "resistencia": 18, "nivel": "MEDIA",  "color": "#F59E0B", "nota": "Resistencia a eritromicina/azitromicina en aumento. Usar solo en alérgicos a penicilina."},
-                {"nombre": "S. pneumoniae",                  "abx": "Penicilina",    "resistencia": 22, "nivel": "MEDIA",  "color": "#F59E0B", "nota": "Resistencia intermedia 15-30% según SIREVA II México 2024."},
-            ]
-        },
-        "neumonia": {
-            "titulo": "Resistencia AMR · Neumonía Comunitaria · Noreste MX",
-            "fuente": "Red PUCRA 2024 · Hospital Universitario Monterrey NL · INRE",
-            "patogenos": [
-                {"nombre": "S. pneumoniae",   "abx": "Amoxicilina",      "resistencia": 12, "nivel": "BAJA",   "color": "#22C55E", "nota": "Primera línea aún efectiva para CAP ambulatoria en la región."},
-                {"nombre": "S. pneumoniae",   "abx": "Macrólidos",       "resistencia": 31, "nivel": "ALTA",   "color": "#EF4444", "nota": "Alta resistencia. Evitar monoterapia con azitromicina en NAC."},
-                {"nombre": "H. influenzae",   "abx": "Ampicilina",       "resistencia": 24, "nivel": "MEDIA",  "color": "#F59E0B", "nota": "Productores de beta-lactamasas en aumento. Preferir Amox/Clav."},
-                {"nombre": "K. pneumoniae",   "abx": "Cefalosporinas 3G", "resistencia": 38, "nivel": "ALTA",   "color": "#EF4444", "nota": "BLEE en 36% según PUCRA 2024. Hospitalización con carbapenem si sospecha."},
-            ]
-        },
-        "oma": {
-            "titulo": "Resistencia AMR · Otitis Media Aguda · Noreste MX",
-            "fuente": "Consenso SEIP 2023 · SIREVA II · Datos regionales NL/Coahuila",
-            "patogenos": [
-                {"nombre": "S. pneumoniae",  "abx": "Amoxicilina",       "resistencia": 15, "nivel": "BAJA",   "color": "#22C55E", "nota": "Amoxicilina sigue siendo primera línea efectiva a dosis altas."},
-                {"nombre": "H. influenzae",  "abx": "Amoxicilina",       "resistencia": 22, "nivel": "MEDIA",  "color": "#F59E0B", "nota": "Productores de beta-lactamasas ~16%. Si falla: Amox/Clav."},
-                {"nombre": "M. catarrhalis", "abx": "Amoxicilina",       "resistencia": 75, "nivel": "ALTA",   "color": "#EF4444", "nota": "Alta resistencia intrínseca. Sensible a Amox/Clav y TMP-SMX."},
-            ]
-        },
-        "sinusitis": {
-            "titulo": "Resistencia AMR · Rinosinusitis Bacteriana · Noreste MX",
-            "fuente": "Guías IDSA 2012 · PRAN México · Datos PUCRA Tamaulipas/NL",
-            "patogenos": [
-                {"nombre": "S. pneumoniae",  "abx": "Amoxicilina",       "resistencia": 18, "nivel": "BAJA",   "color": "#22C55E", "nota": "Primera línea IDSA. Efectiva en 80% de sinusitis bacteriana."},
-                {"nombre": "S. pneumoniae",  "abx": "Macrólidos",        "resistencia": 35, "nivel": "ALTA",   "color": "#EF4444", "nota": "Alta resistencia en México. NO usar como monoterapia."},
-                {"nombre": "H. influenzae",  "abx": "Ampicilina",        "resistencia": 24, "nivel": "MEDIA",  "color": "#F59E0B", "nota": "Si falla amoxicilina en 72h: cambiar a Amox/Clav o fluoroquinolona."},
-            ]
-        },
-    }
-
-    amr = AMR_DATA.get(patologia, AMR_DATA["faringitis"])
-
-    barras_html = ""
-    for pat in amr["patogenos"]:
-        r = pat["resistencia"]
-        col_r = pat["color"]
-        barras_html += f"""
-        <div style="margin-bottom:18px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-            <div>
-              <span style="font-size:0.8rem; font-weight:600; color:#F0FDFA;">{pat['nombre']}</span>
-              <span style="font-size:0.72rem; color:rgba(240,253,250,0.4); margin-left:8px;">vs {pat['abx']}</span>
-            </div>
-            <div style="display:flex; align-items:center; gap:8px;">
-              <span style="font-size:0.62rem; font-weight:700; letter-spacing:2px; text-transform:uppercase;
-                  color:{col_r}; border:1px solid {col_r}55; border-radius:99px; padding:2px 8px; background:{col_r}15;">{pat['nivel']}</span>
-              <span style="font-family:'DM Serif Display',serif; font-size:1.1rem; color:{col_r}; font-weight:700;">{r}%</span>
-            </div>
-          </div>
-          <div style="width:100%; height:6px; background:rgba(255,255,255,0.07); border-radius:99px; overflow:hidden; margin-bottom:5px;">
-            <div style="width:{r}%; height:100%; background:linear-gradient(to right,{col_r}88,{col_r}); border-radius:99px;
-                transition:width 1s ease;"></div>
-          </div>
-          <div style="font-size:0.73rem; color:rgba(240,253,250,0.38); line-height:1.4;">{pat['nota']}</div>
-        </div>"""
-
-    amr_height = 120 + len(amr["patogenos"]) * 88
-    components.html(f"""
-    <style>
-      body {{ margin:0; padding:0; background:transparent; font-family:'DM Sans',sans-serif; }}
-    </style>
-    <div style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.07);
-        border-radius:18px; padding:22px 24px;">
-
-      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:18px; flex-wrap:wrap; gap:10px;">
-        <div>
-          <div style="font-size:0.6rem; font-weight:700; letter-spacing:3px; text-transform:uppercase;
-              color:rgba(240,253,250,0.35); margin-bottom:5px;">&#129440; Semaforo de Resistencia Antimicrobiana</div>
-          <div style="font-size:1rem; color:#F0FDFA; font-weight:600;">{amr["titulo"]}</div>
-        </div>
-        <div style="text-align:right;">
-          <div style="font-size:0.58rem; font-weight:700; letter-spacing:2px; text-transform:uppercase;
-              color:#14B8A6; border:1px solid rgba(13,148,136,0.35); border-radius:99px;
-              padding:3px 10px; background:rgba(13,148,136,0.08); display:inline-block; margin-bottom:5px;">
-            Demo · SINAVE-Ready
-          </div>
-          <div style="font-size:0.62rem; color:rgba(240,253,250,0.3); line-height:1.4;">{amr["fuente"]}</div>
-        </div>
-      </div>
-
-      <div style="display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap;">
-        <span style="font-size:0.6rem; font-weight:700; padding:3px 10px; border-radius:99px;
-            background:rgba(34,197,94,0.12); color:#22C55E; border:1px solid rgba(34,197,94,0.35);">&#9679; BAJA &lt;20%</span>
-        <span style="font-size:0.6rem; font-weight:700; padding:3px 10px; border-radius:99px;
-            background:rgba(245,158,11,0.12); color:#F59E0B; border:1px solid rgba(245,158,11,0.35);">&#9679; MEDIA 20-34%</span>
-        <span style="font-size:0.6rem; font-weight:700; padding:3px 10px; border-radius:99px;
-            background:rgba(239,68,68,0.12); color:#EF4444; border:1px solid rgba(239,68,68,0.35);">&#9679; ALTA &ge;35%</span>
-      </div>
-
-      {barras_html}
-
-      <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.06);
-          font-size:0.65rem; color:rgba(240,253,250,0.22); line-height:1.5;">
-        Datos basados en evidencia para demo. Arquitectura lista para integracion con API REST de SINAVE/InDRE.
-        Actualizacion automatica proyectada en Fase 3 del roadmap SITRE.
-      </div>
-    </div>
-    """, height=amr_height, scrolling=False)
-
-    # Banner epidemiológico
-    st.markdown("""
-    <div style="max-width:980px; margin:-10px auto 22px; display:flex; gap:12px; flex-wrap:wrap;">
-      <div style="flex:1; min-width:260px; display:flex; align-items:center; gap:12px;
-          background:rgba(13,148,136,0.07); border:1px solid rgba(13,148,136,0.22);
-          border-radius:12px; padding:12px 18px;">
-        <span style="font-size:1.3rem; flex-shrink:0;">📍</span>
-        <div>
-          <div style="font-size:0.58rem; font-weight:700; letter-spacing:3px; text-transform:uppercase; color:#14B8A6; margin-bottom:3px;">Vigilancia Epidemiológica · Noreste MX</div>
-          <div style="font-size:0.83rem; color:#F0FDFA; line-height:1.5;">Alta circulación de <b>Influenza A</b>, <b>VSR</b> y <b>Rinovirus</b> en Coahuila y Nuevo León.</div>
-        </div>
-      </div>
-      <div style="display:flex; flex-direction:column; justify-content:center; align-items:center;
-          background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);
-          border-radius:12px; padding:12px 22px; min-width:160px; text-align:center;">
-        <div style="font-size:1.5rem; margin-bottom:4px;">🌎</div>
-        <div style="font-size:0.58rem; font-weight:700; letter-spacing:3px; text-transform:uppercase; color:rgba(240,253,250,0.45); margin-bottom:2px;">Región detectada</div>
-        <div style="font-family:'DM Serif Display',serif; font-size:1rem; color:#F0FDFA;">Coahuila / NL</div>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ── INTEROPERABILIDAD & AUDIT TRAIL ───────────────────────────────────────
-    fhir_data       = generar_fhir_r4(paciente, resultado, decision_info, metadatos)
-    research_data   = generar_json_estructurado(paciente, resultado, decision_info, metadatos)
-    fhir_bytes      = json.dumps(fhir_data,     indent=2, ensure_ascii=False).encode("utf-8")
-    research_bytes  = json.dumps(research_data, indent=2, ensure_ascii=False).encode("utf-8")
+    # ══════════════════════════════════════════════════════════════
+    # BLOQUE 7 — INTEROPERABILIDAD & AUDIT TRAIL
+    # ══════════════════════════════════════════════════════════════
+    fhir_data      = generar_fhir_r4(paciente, resultado, decision_info, metadatos)
+    research_data  = generar_json_estructurado(paciente, resultado, decision_info, metadatos)
+    fhir_bytes     = json.dumps(fhir_data,    indent=2, ensure_ascii=False).encode("utf-8")
+    research_bytes = json.dumps(research_data,indent=2, ensure_ascii=False).encode("utf-8")
     abx_tag = "ABX_AVOIDED" if tipo == "viral" else ("ABX_PRESCRIBED" if tipo == "bacteriana" else "ESCALATION")
 
-    st.markdown(f"""
-<div style="max-width:980px; margin:0 auto 24px; background:rgba(13,148,136,0.05);
-    border:1px solid rgba(13,148,136,0.25); border-radius:20px; padding:24px 28px;
-    animation:fade-up 0.5s 0.55s both;">
-
-  <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:18px;">
-    <div style="display:flex; align-items:center; gap:12px;">
-      <span style="font-size:1.4rem;">🔗</span>
-      <div>
-        <div style="font-size:0.58rem; font-weight:700; letter-spacing:3px; text-transform:uppercase; color:#14B8A6;">
-          Interoperabilidad &amp; Audit Trail
-        </div>
-        <div style="font-size:0.8rem; color:rgba(240,253,250,0.55); margin-top:2px;">
-          HL7 FHIR R4 · Structured JSON · SHA-256 Integrity
-        </div>
-      </div>
-    </div>
-    <div style="display:flex; gap:8px; flex-wrap:wrap;">
-      <span style="font-size:0.58rem; font-weight:700; padding:4px 12px; border-radius:99px;
-          background:rgba(34,197,94,0.12); color:#22C55E; border:1px solid rgba(34,197,94,0.3);">
-        ● DETERMINISTIC ENGINE
-      </span>
-      <span style="font-size:0.58rem; font-weight:700; padding:4px 12px; border-radius:99px;
-          background:rgba(59,130,246,0.12); color:#3B82F6; border:1px solid rgba(59,130,246,0.3);">
-        ● {abx_tag}
-      </span>
-    </div>
+    with st.expander("🔗 Interoperabilidad & Audit Trail — HL7 FHIR R4 · SHA-256", expanded=False):
+        st.markdown(f"""
+<div style="background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.07);
+    border-radius:12px;padding:13px 16px;margin-bottom:14px;font-family:monospace;">
+  <div style="font-size:0.55rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+      color:rgba(240,253,250,0.35);margin-bottom:7px;">Decision ID · Audit Hash</div>
+  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+    <span style="font-size:0.95rem;font-weight:700;color:#14B8A6;letter-spacing:1.5px;">{folio}</span>
+    <span style="font-size:0.65rem;color:rgba(240,253,250,0.4);">
+      SHA-256 · {decision_info["hash_full"][:32]}…
+    </span>
   </div>
-
-  <div style="background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.07);
-      border-radius:12px; padding:14px 18px; margin-bottom:16px; font-family:monospace;">
-    <div style="font-size:0.58rem; font-weight:700; letter-spacing:2px; text-transform:uppercase;
-        color:rgba(240,253,250,0.4); margin-bottom:8px;">Decision ID · Audit Hash</div>
-    <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
-      <span style="font-size:1rem; font-weight:700; color:#14B8A6; letter-spacing:1.5px;">{folio}</span>
-      <span style="font-size:0.68rem; color:rgba(240,253,250,0.45);">
-        SHA-256 · {decision_info["hash_full"][:32]}…
-      </span>
-    </div>
-    <div style="margin-top:8px; font-size:0.62rem; color:rgba(240,253,250,0.3); line-height:1.5;">
-      Hash: SHA-256(timestamp_utc + decision_type + clinical_snapshot) · Algoritmo: determinístico · Reproducible
-    </div>
+  <div style="margin-top:6px;font-size:0.58rem;color:rgba(240,253,250,0.25);">
+    Hash: SHA-256(timestamp_utc + decision_type + clinical_snapshot) · Determinístico · Reproducible
   </div>
-
-  <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:0px;">
-    <div style="background:rgba(59,130,246,0.06); border:1px solid rgba(59,130,246,0.2);
-        border-radius:12px; padding:14px 16px;">
-      <div style="font-size:0.58rem; font-weight:700; letter-spacing:2px; text-transform:uppercase;
-          color:#3B82F6; margin-bottom:6px;">⬡ FHIR R4 Bundle</div>
-      <div style="font-size:0.75rem; color:rgba(240,253,250,0.55); line-height:1.5;">
-        Observation + AuditEvent · HL7 R4 · SNOMED/LOINC<br>
-        <span style="color:rgba(240,253,250,0.3);">Compatible con HIS/EHR hospitalarios</span>
-      </div>
-    </div>
-    <div style="background:rgba(34,197,94,0.06); border:1px solid rgba(34,197,94,0.2);
-        border-radius:12px; padding:14px 16px;">
-      <div style="font-size:0.58rem; font-weight:700; letter-spacing:2px; text-transform:uppercase;
-          color:#22C55E; margin-bottom:6px;">{"{ }"} Research JSON</div>
-      <div style="font-size:0.75rem; color:rgba(240,253,250,0.55); line-height:1.5;">
-        Features listas para ML · Stewardship · DOIs<br>
-        <span style="color:rgba(240,253,250,0.3);">Listo para análisis epidemiológico / Python / R</span>
-      </div>
-    </div>
-  </div>
-
 </div>
-    """, unsafe_allow_html=True)
-# ▼▼▼ MEGAZORD 3: CLINICAL OVERRIDE (Human-in-the-Loop) ▼▼▼
-    st.markdown("<hr style='opacity:0.1; margin:30px 0 20px;'>", unsafe_allow_html=True)
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:0;">
+  <span style="font-size:0.6rem;font-weight:700;padding:4px 12px;border-radius:99px;
+      background:rgba(34,197,94,0.12);color:#22C55E;border:1px solid rgba(34,197,94,0.3);">
+    ● DETERMINISTIC ENGINE
+  </span>
+  <span style="font-size:0.6rem;font-weight:700;padding:4px 12px;border-radius:99px;
+      background:rgba(59,130,246,0.12);color:#3B82F6;border:1px solid rgba(59,130,246,0.3);">
+    ● {abx_tag}
+  </span>
+</div>
+""", unsafe_allow_html=True)
+        col_i1, col_i2 = st.columns(2)
+        with col_i1:
+            st.download_button(
+                label="⬡  Exportar FHIR R4 Bundle",
+                data=fhir_bytes,
+                file_name=f"SITRE_{folio}_FHIR_R4.json",
+                mime="application/json",
+                use_container_width=True,
+                help="HL7 FHIR R4 — Observation + AuditEvent. Compatible con HIS/EHR."
+            )
+        with col_i2:
+            st.download_button(
+                label="{ }  Exportar Research JSON",
+                data=research_bytes,
+                file_name=f"SITRE_{folio}_research.json",
+                mime="application/json",
+                use_container_width=True,
+                help="JSON con features para ML, stewardship y análisis epidemiológico."
+            )
+
+    # ══════════════════════════════════════════════════════════════
+    # BLOQUE 8 — HUMAN-IN-THE-LOOP OVERRIDE
+    # ══════════════════════════════════════════════════════════════
+    st.markdown("<hr style='opacity:0.08;margin:24px 0 18px;'>", unsafe_allow_html=True)
     st.markdown("""
-    <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
-        <span style="font-size:1.5rem;">🧑‍⚕️</span>
-        <div>
-            <div style="font-size:0.6rem; font-weight:700; letter-spacing:3px; text-transform:uppercase; color:#F59E0B;">Human-in-the-loop (HITL)</div>
-            <div style="font-size:1.1rem; color:#F0FDFA; font-weight:600; font-family:'DM Serif Display',serif;">Juicio Clínico & Anulación (Override)</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+  <span style="font-size:1.4rem;">🧑‍⚕️</span>
+  <div>
+    <div style="font-size:0.58rem;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#F59E0B;">
+      Human-in-the-Loop (HITL)</div>
+    <div style="font-size:1rem;color:#F0FDFA;font-weight:600;font-family:'DM Serif Display',serif;">
+      Juicio Clínico & Anulación (Override)</div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
     if "override_data" not in st.session_state:
         st.session_state.override_data = None
 
     override_toggle = st.toggle("⚠️ Discrepo con la recomendación. Activar anulación clínica.")
-
     if override_toggle:
         with st.container(border=True):
-            st.markdown("<p style='color:#F59E0B; font-size:0.75rem; font-weight:700; letter-spacing:1px; margin-bottom:12px;'>FORMULARIO DE AUDITORÍA: ANULACIÓN CLÍNICA</p>", unsafe_allow_html=True)
-            
+            st.markdown("<p style='color:#F59E0B;font-size:0.73rem;font-weight:700;letter-spacing:1px;margin-bottom:10px;'>FORMULARIO DE AUDITORÍA: ANULACIÓN CLÍNICA</p>", unsafe_allow_html=True)
             nueva_decision = st.selectbox("Nueva Decisión Médica Adoptada:", [
                 "Escalar a tratamiento antibiótico",
                 "Derivación urgente a 2do nivel / Hospitalización",
@@ -2476,83 +2377,63 @@ El QR del PDF enlaza a la version movil completa.
                 "Cambio de esquema por sospecha de resistencia",
                 "Otra (Especificar en la justificación)"
             ])
-            
-            justificacion = st.text_area("Justifique su decisión (Obligatorio para el Audit Trail):", placeholder="Ej. El paciente luce tóxico, tiene mala tolerancia a la vía oral y contexto social de riesgo...")
-
+            justificacion = st.text_area("Justifique su decisión (Obligatorio para el Audit Trail):",
+                placeholder="Ej. El paciente luce tóxico, mala tolerancia vía oral y contexto social de riesgo...")
             if st.button("💾 Sellar Anulación en el Expediente", type="secondary"):
                 if len(justificacion) < 10:
-                    st.error("Por favor, ingrese una justificación clínica válida (mínimo 10 caracteres).")
+                    st.error("Ingrese una justificación clínica válida (mínimo 10 caracteres).")
                 else:
                     st.session_state.override_data = {
-                        "decision_sitre": c['tag'],
+                        "decision_sitre": c["tag"],
                         "nueva_decision": nueva_decision,
                         "justificacion": justificacion
                     }
-                    st.success("✅ Anulación registrada criptográficamente. Se incluirá en el reporte PDF y en la base de datos.")
+                    st.success("✅ Anulación registrada criptográficamente. Se incluirá en el reporte PDF.")
     else:
         st.session_state.override_data = None
-    # ▲▲▲ FIN MEGAZORD 3 ▲▲▲
-    col_i1, col_i2 = st.columns(2)
-    with col_i1:
-        st.download_button(
-            label="⬡  Exportar FHIR R4 Bundle",
-            data=fhir_bytes,
-            file_name=f"SITRE_{folio}_FHIR_R4.json",
-            mime="application/json",
-            use_container_width=True,
-            help="HL7 FHIR R4 — Observation + AuditEvent. Compatible con sistemas HIS/EHR hospitalarios.",
-        )
-    with col_i2:
-        st.download_button(
-            label="{ }  Exportar Research JSON",
-            data=research_bytes,
-            file_name=f"SITRE_{folio}_research.json",
-            mime="application/json",
-            use_container_width=True,
-            help="JSON estructurado con features para ML, stewardship antimicrobiano y análisis epidemiológico.",
-        )
 
-    st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-
-    # Botones
-    col_a, col_b, col_c = st.columns([1,1.2,1])
+    # ══════════════════════════════════════════════════════════════
+    # BLOQUE 9 — PDF + BOTONES DE NAVEGACIÓN
+    # ══════════════════════════════════════════════════════════════
+    st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
+    col_a, col_b, col_c = st.columns([1, 1.2, 1])
     with col_b:
         if PDF_DISPONIBLE:
             def limpiar(t):
-                for bad in ["🚨","⚠️","🦠","🧫","🧊","镜","•","💊","🔵","✅"]:
-                    t = t.replace(bad,"")
-                return t.encode("latin-1","ignore").decode("latin-1").strip()
+                for bad in ["🚨","⚠️","🦠","🧫","🧊","•","💊","🔵","✅","🔶"]:
+                    t = t.replace(bad, "")
+                return t.encode("latin-1", "ignore").decode("latin-1").strip()
 
             def generar_pdf():
                 from fpdf import FPDF
                 from fpdf.enums import XPos, YPos
                 import qrcode
                 import io as _io
+                from ficha_educativa import get_ficha as _get_ficha, generar_html_ficha as _gen_html
 
-                # Generar QR con instrucciones para el paciente
                 INSTRUCCIONES_PAT = {
                     "faringitis": {
-                        "viral":      "Su diagnostico es viral. NO necesita antibioticos. Tome paracetamol para la fiebre, descanse y tome mucho liquido. Regrese si empeora despues de 7 dias.",
-                        "bacteriana": "Su medico indico tratamiento antibiotico. Tomelo completo aunque se sienta mejor. No lo interrumpa. Regrese si hay fiebre mayor 3 dias de tratamiento.",
-                        "urgencia":   "URGENCIA: Dirijase inmediatamente a urgencias del hospital mas cercano.",
+                        "viral":      "Su diagnostico es viral. NO necesita antibioticos. Tome paracetamol, descanse y beba liquidos. Regrese si empeora despues de 7 dias.",
+                        "bacteriana": "Su medico indico antibiotico. Tomelo completo. No lo interrumpa. Regrese si hay fiebre despues de 3 dias de tratamiento.",
+                        "urgencia":   "URGENCIA: Dirijase inmediatamente al hospital mas cercano.",
                     },
                     "neumonia": {
-                        "viral":      "Su neumonia es leve. Tome el antibiotico recetado por su medico. Descanse, tome liquidos. Regrese en 48 horas o antes si tiene dificultad para respirar.",
-                        "urgencia":   "URGENCIA HOSPITALARIA: Necesita atencion hospitalaria inmediata. No espere.",
-                        "gris":       "Su caso requiere vigilancia. Tome el medicamento indicado y regrese en 48 horas. Si tiene dificultad para respirar, vaya a urgencias.",
+                        "viral":      "Neumonia leve. Tome el medicamento indicado. Descanse y beba liquidos. Control obligatorio en 48 horas.",
+                        "urgencia":   "URGENCIA HOSPITALARIA: Necesita atencion inmediata. No espere.",
+                        "gris":       "Su caso requiere vigilancia. Tome el medicamento y regrese en 48 horas.",
                     },
                     "oma": {
-                        "bacteriana": "Otitis media detectada. Tome el antibiotico exactamente como se indico. Use analgesicos para el dolor. Regrese si en 3 dias no hay mejoria.",
-                        "viral":      "Su oido no tiene infeccion bacteriana. Use analgesicos para el dolor. Regrese si empeora o aparece fiebre alta.",
-                        "gris":       "Observacion activa. Si el dolor de oido persiste o empeora en 48-72 horas, regrese con su medico.",
+                        "bacteriana": "Otitis confirmada. Tome el antibiotico como se indico. Regrese si en 3 dias no mejora.",
+                        "viral":      "Su oido no tiene infeccion bacteriana. Use analgesicos. Regrese si empeora.",
+                        "gris":       "Observacion activa. Regrese en 48-72 horas si persiste o empeora.",
                     },
                     "sinusitis": {
-                        "bacteriana": "Sinusitis bacteriana. Tome el antibiotico completo. Lave su nariz con solucion salina. Regrese si en 72 horas no mejora.",
-                        "viral":      "Su sinusitis es viral. No necesita antibiotico. Lave su nariz con agua salina, use descongestionante. Regrese si empeora despues de 10 dias.",
-                        "urgencia":   "URGENCIA: Tiene signos de complicacion. Acuda a urgencias de inmediato.",
+                        "bacteriana": "Sinusitis bacteriana. Tome el antibiotico completo y haga lavados nasales con sal. Regrese si no mejora en 72 horas.",
+                        "viral":      "Sinusitis viral. No necesita antibiotico. Lavados nasales con agua salina. Regrese si empeora despues de 10 dias.",
+                        "urgencia":   "URGENCIA: Acuda a urgencias de inmediato.",
                     },
                 }
-                instruccion = INSTRUCCIONES_PAT.get(patologia, {}).get(tipo, "Siga las indicaciones de su medico y regrese si sus sintomas empeoran.")
+                instruccion = INSTRUCCIONES_PAT.get(patologia, {}).get(tipo, "Siga las indicaciones de su medico.")
                 qr_text = f"{folio}\nPaciente: {nombre_pac}\nDx: {c['tag']} - {nombre_pat_display}\n\n{instruccion}"
 
                 qr = qrcode.QRCode(version=2, box_size=4, border=2,
@@ -2562,16 +2443,15 @@ El QR del PDF enlaza a la version movil completa.
                 qr_img = qr.make_image(fill_color="black", back_color="white")
                 qr_buf = _io.BytesIO()
                 qr_img.save(qr_buf, format="PNG")
-                qr_b64 = base64.b64encode(qr_buf.getvalue()).decode()
 
+                # ── PÁGINA 1: REPORTE MÉDICO ──────────────────────────────
                 pdf = FPDF(); pdf.add_page()
-                # Header
                 pdf.set_font("Helvetica","B",20); pdf.set_text_color(13,148,136)
                 pdf.cell(0,15,"SITRE - REPORTE DE TRIAGE",new_x=XPos.LMARGIN,new_y=YPos.NEXT,align="C")
                 pdf.set_font("Helvetica","",9); pdf.set_text_color(120,120,120)
                 pdf.cell(0,8,f"Folio: {folio}  |  {fecha_str}  {hora_str}  |  {nombre_pat_display}",new_x=XPos.LMARGIN,new_y=YPos.NEXT,align="C")
-                pdf.ln(6); pdf.set_fill_color(240,253,250)
-                pdf.set_font("Helvetica","B",12); pdf.set_text_color(0,0,0)
+                pdf.ln(6)
+                pdf.set_fill_color(240,253,250); pdf.set_font("Helvetica","B",12); pdf.set_text_color(0,0,0)
                 pdf.cell(0,10,f" PACIENTE: {limpiar(nombre_pac.upper())}",new_x=XPos.LMARGIN,new_y=YPos.NEXT,fill=True)
                 pdf.ln(4); pdf.set_font("Helvetica","B",11)
                 pdf.cell(0,10,f"PATOLOGIA: {nombre_pat_display}  |  RESULTADO: {c['tag']}",new_x=XPos.LMARGIN,new_y=YPos.NEXT)
@@ -2582,160 +2462,122 @@ El QR del PDF enlaza a la version movil completa.
                 pdf.cell(0,10,"GUIA TERAPEUTICA:",new_x=XPos.LMARGIN,new_y=YPos.NEXT)
                 pdf.set_font("Helvetica","",10); pdf.multi_cell(0,7,limpiar(tratamiento))
                 pdf.ln(10)
-                # ▼▼▼ PDF: SECCIÓN DE CLINICAL OVERRIDE ▼▼▼
+
+                # Override (si existe)
                 override = st.session_state.get("override_data")
                 if override:
-                    pdf.set_fill_color(254, 243, 199) # Fondo ámbar claro
-                    pdf.set_font("Helvetica","B",10); pdf.set_text_color(180,83,9) # Texto naranja oscuro
+                    pdf.set_fill_color(254,243,199)
+                    pdf.set_font("Helvetica","B",10); pdf.set_text_color(180,83,9)
                     pdf.cell(0,8," HUMAN-IN-THE-LOOP: ANULACION CLINICA (OVERRIDE)",new_x=XPos.LMARGIN,new_y=YPos.NEXT,fill=True)
                     pdf.set_font("Helvetica","",9); pdf.set_text_color(0,0,0)
-                    
-                    pdf.multi_cell(0,6,limpiar(f"Recomendacion SITRE: {override['decision_sitre']}"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-                    pdf.multi_cell(0,6,limpiar(f"Decision Medica Final: {override['nueva_decision']}"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-                    
+                    pdf.multi_cell(0,6,limpiar(f"Recomendacion SITRE: {override['decision_sitre']}"),new_x=XPos.LMARGIN,new_y=YPos.NEXT)
+                    pdf.multi_cell(0,6,limpiar(f"Decision Medica Final: {override['nueva_decision']}"),new_x=XPos.LMARGIN,new_y=YPos.NEXT)
                     pdf.set_font("Helvetica","I",9)
-                    pdf.multi_cell(0,6,limpiar(f"Justificacion del Medico: \"{override['justificacion']}\""), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-                    pdf.ln(6)
-                # ▲▲▲ FIN PDF OVERRIDE ▲▲▲
+                    pdf.multi_cell(0,6,limpiar(f"Justificacion: \"{override['justificacion']}\""),new_x=XPos.LMARGIN,new_y=YPos.NEXT)
+                    pdf.ln(5)
 
-
-                # 48h Time-Out section (solo cuando hay antibiótico)
-                if tipo in ["bacteriana", "urgencia"]:
-                    pdf.ln(4)
-                    pdf.set_font("Helvetica","B",11); pdf.set_text_color(200,100,0)
-                    pdf.cell(0,10,"REVISION OBLIGATORIA A 48-72 HORAS (Antibiotic Time-Out):",new_x=XPos.LMARGIN,new_y=YPos.NEXT)
-                    pdf.set_font("Helvetica","",9); pdf.set_text_color(60,60,60)
+                # 48h Time-Out checklist
+                if tipo in ["bacteriana","urgencia"]:
+                    pdf.ln(4); pdf.set_font("Helvetica","B",10); pdf.set_text_color(200,100,0)
+                    pdf.cell(0,9,"REVISION 48-72 HORAS (Antibiotic Time-Out):",new_x=XPos.LMARGIN,new_y=YPos.NEXT)
                     to_map = {
-                        "faringitis": ["Temp < 37.5C (fiebre resuelta)","Dolor faringeo reducido >= 50%","Tolera liquidos sin dificultad","Estado general mejorando"],
-                        "neumonia":   ["FR < 24 rpm","Temp < 37.8C o en descenso","SpO2 >= 94% en aire ambiente","Mejoria subjetiva del esfuerzo respiratorio"],
-                        "oma":        ["Otalgia reducida >= 50%","Temperatura < 37.5C","Irritabilidad (ninos) mejorada","Otorrea reducida si existia"],
-                        "sinusitis":  ["Descarga nasal reducida","Dolor facial reducido >= 50%","Fiebre resuelta","Mejoria del estado general"],
+                        "faringitis": ["Temp < 37.5C","Dolor faringeo reducido >= 50%","Tolera liquidos sin dificultad","Estado general mejorando"],
+                        "neumonia":   ["FR < 24 rpm","Temp < 37.8C","SpO2 >= 94% aire ambiente","Mejoria esfuerzo respiratorio"],
+                        "oma":        ["Otalgia reducida >= 50%","Temperatura < 37.5C","Irritabilidad mejorada","Otorrea reducida"],
+                        "sinusitis":  ["Descarga nasal reducida","Dolor facial reducido >= 50%","Fiebre resuelta","Mejoria general"],
                     }
-                    for crit in to_map.get(patologia, []):
-                        pdf.cell(0,6,f"  [ ]  {crit}",new_x=XPos.LMARGIN,new_y=YPos.NEXT)
-                    pdf.ln(2)
-                    pdf.set_font("Helvetica","I",8); pdf.set_text_color(130,130,130)
-                    pdf.multi_cell(0,5,"Si NO mejora a 48-72h: escalar antibiotico segun guias IDSA/BTS/AAP. Ver alternativas en el sistema SITRE.")
+                    pdf.set_font("Helvetica","",9); pdf.set_text_color(60,60,60)
+                    for cr in to_map.get(patologia,[]):
+                        pdf.cell(0,6,f"  [ ]  {cr}",new_x=XPos.LMARGIN,new_y=YPos.NEXT)
+                    pdf.ln(4)
 
-                # ── PÁGINA 2: FICHA EDUCATIVA PARA EL PACIENTE ──────────────
-                from ficha_educativa import get_ficha, generar_html_ficha
-                ficha_p = get_ficha(patologia, tipo, folio, fecha_str, nombre_pat_display)
-                color_r, color_g, color_b = (13,148,136)  # teal default
-                if ficha_p["color_hero"].startswith("#"):
-                    hex_c = ficha_p["color_hero"].lstrip("#")
-                    if len(hex_c) == 6:
-                        color_r = int(hex_c[0:2],16)
-                        color_g = int(hex_c[2:4],16)
-                        color_b = int(hex_c[4:6],16)
+                # QR section
+                pdf.set_font("Helvetica","B",10); pdf.set_text_color(13,148,136)
+                pdf.cell(0,8,"INSTRUCCIONES PARA EL PACIENTE (escanee el QR):",new_x=XPos.LMARGIN,new_y=YPos.NEXT)
+                pdf.set_font("Helvetica","",9); pdf.set_text_color(60,60,60)
+                pdf.multi_cell(130,6,limpiar(instruccion))
+                qr_path = "sitre_qr.png"
+                with open(qr_path,"wb") as f_q: f_q.write(qr_buf.getvalue())
+                y_qr = pdf.get_y()
+                pdf.image(qr_path, x=160, y=y_qr-20, w=35, h=35)
+                pdf.ln(18)
+                pdf.set_font("Helvetica","I",8); pdf.set_text_color(130,130,130)
+                pdf.multi_cell(0,5,"Nota: Este documento es sugerencia basada en algoritmos clinicos validados. La decision final recae en el medico tratante.")
 
+                # ── PÁGINA 2: FICHA EDUCATIVA PARA EL PACIENTE ───────────
+                ficha_p = _get_ficha(patologia, tipo, folio, fecha_str, nombre_pat_display)
                 pdf.add_page()
-                # Header de la ficha
-                pdf.set_fill_color(color_r, color_g, color_b)
-                pdf.rect(0, 0, 210, 30, 'F')
-                pdf.set_font("Helvetica","B",18)
-                pdf.set_text_color(255,255,255)
-                pdf.text(15, 12, "SITRE · INSTRUCCIONES PARA EL PACIENTE")
-                pdf.set_font("Helvetica","",9)
-                pdf.set_text_color(220,255,250)
-                pdf.text(15, 22, f"Folio: {folio}  |  {fecha_str}  |  {nombre_pat_display}")
-
-                pdf.ln(34)
-
-                # Título principal
-                pdf.set_font("Helvetica","B",22)
-                pdf.set_text_color(color_r, color_g, color_b)
-                pdf.cell(0,12,f"{ficha_p['emoji_hero'].encode('latin-1','replace').decode('latin-1')} {limpiar(ficha_p['titulo'])}",
-                    new_x=XPos.LMARGIN,new_y=YPos.NEXT)
-                pdf.set_font("Helvetica","I",11)
-                pdf.set_text_color(80,80,80)
+                color_r, color_g, color_b = 13, 148, 136
+                if ficha_p["color_hero"].startswith("#"):
+                    hx = ficha_p["color_hero"].lstrip("#")
+                    if len(hx) == 6:
+                        color_r, color_g, color_b = int(hx[0:2],16), int(hx[2:4],16), int(hx[4:6],16)
+                pdf.set_fill_color(color_r,color_g,color_b)
+                pdf.rect(0,0,210,28,"F")
+                pdf.set_font("Helvetica","B",16); pdf.set_text_color(255,255,255)
+                pdf.text(12,12,"SITRE · INSTRUCCIONES PARA EL PACIENTE")
+                pdf.set_font("Helvetica","",9); pdf.set_text_color(220,255,250)
+                pdf.text(12,21,f"Folio: {folio}  |  {fecha_str}  |  {nombre_pat_display}")
+                pdf.ln(32)
+                pdf.set_font("Helvetica","B",18); pdf.set_text_color(color_r,color_g,color_b)
+                pdf.cell(0,11,limpiar(ficha_p['titulo']),new_x=XPos.LMARGIN,new_y=YPos.NEXT)
+                pdf.set_font("Helvetica","I",11); pdf.set_text_color(80,80,80)
                 pdf.cell(0,8,limpiar(ficha_p['subtitulo']),new_x=XPos.LMARGIN,new_y=YPos.NEXT)
                 pdf.ln(4)
-
-                # Explicación (anti-mito)
                 if ficha_p.get('mito_titulo'):
-                    pdf.set_fill_color(color_r, color_g, color_b)
-                    pdf.set_font("Helvetica","B",10)
-                    pdf.set_text_color(255,255,255)
+                    pdf.set_fill_color(color_r,color_g,color_b)
+                    pdf.set_font("Helvetica","B",10); pdf.set_text_color(255,255,255)
                     pdf.cell(0,8,f" {limpiar(ficha_p['mito_titulo'])}",new_x=XPos.LMARGIN,new_y=YPos.NEXT,fill=True)
-                    pdf.set_font("Helvetica","",9)
-                    pdf.set_text_color(30,30,30)
+                    pdf.set_font("Helvetica","",9); pdf.set_text_color(30,30,30)
                     pdf.multi_cell(0,6,limpiar(ficha_p['mito_cuerpo']))
                     pdf.ln(2)
-
-                # OMS badge
                 if ficha_p.get('dato_oms'):
-                    pdf.set_fill_color(245,250,255)
-                    pdf.set_font("Helvetica","I",8)
-                    pdf.set_text_color(60,80,120)
-                    pdf.multi_cell(0,6,f"  Dato OMS/CDC: {limpiar(ficha_p['dato_oms'])}",fill=True)
-                    pdf.ln(4)
-
-                # Qué hacer
+                    pdf.set_fill_color(240,248,255)
+                    pdf.set_font("Helvetica","I",8); pdf.set_text_color(60,80,120)
+                    pdf.multi_cell(0,5,f"OMS/CDC: {limpiar(ficha_p['dato_oms'])}",fill=True)
+                    pdf.ln(3)
                 if ficha_p.get('que_hacer'):
-                    pdf.set_font("Helvetica","B",11)
-                    pdf.set_text_color(color_r, color_g, color_b)
-                    pdf.cell(0,9,"Que hacer hoy:",new_x=XPos.LMARGIN,new_y=YPos.NEXT)
-                    pdf.set_font("Helvetica","",9)
-                    pdf.set_text_color(20,20,20)
-                    for emoji_p, texto_p in ficha_p['que_hacer']:
-                        safe_emoji = emoji_p.encode('latin-1','replace').decode('latin-1')
-                        pdf.cell(0,7,f"  {safe_emoji}  {limpiar(texto_p)}",new_x=XPos.LMARGIN,new_y=YPos.NEXT)
-                    pdf.ln(4)
-
-                # Cuándo regresar
+                    pdf.set_font("Helvetica","B",10); pdf.set_text_color(color_r,color_g,color_b)
+                    pdf.cell(0,8,"Que hacer hoy:",new_x=XPos.LMARGIN,new_y=YPos.NEXT)
+                    pdf.set_font("Helvetica","",9); pdf.set_text_color(20,20,20)
+                    for em_p, tx_p in ficha_p['que_hacer']:
+                        safe_em = em_p.encode('latin-1','replace').decode('latin-1')
+                        pdf.cell(0,6,f"  {safe_em}  {limpiar(tx_p)}",new_x=XPos.LMARGIN,new_y=YPos.NEXT)
+                    pdf.ln(3)
                 if ficha_p.get('cuando_regresar'):
                     pdf.set_fill_color(255,235,235)
-                    pdf.set_font("Helvetica","B",10)
-                    pdf.set_text_color(180,20,20)
+                    pdf.set_font("Helvetica","B",10); pdf.set_text_color(180,20,20)
                     pdf.cell(0,8," Regrese al medico si:",new_x=XPos.LMARGIN,new_y=YPos.NEXT,fill=True)
-                    pdf.set_font("Helvetica","",9)
-                    pdf.set_text_color(20,20,20)
-                    for alarma in ficha_p['cuando_regresar']:
-                        pdf.cell(0,6,f"  ! {limpiar(alarma)}",new_x=XPos.LMARGIN,new_y=YPos.NEXT)
-                    pdf.ln(4)
-
-                # Mensaje final
-                pdf.set_fill_color(color_r, color_g, color_b)
-                pdf.set_font("Helvetica","B",10)
-                pdf.set_text_color(255,255,255)
+                    pdf.set_font("Helvetica","",9); pdf.set_text_color(20,20,20)
+                    for al in ficha_p['cuando_regresar']:
+                        pdf.cell(0,6,f"  ! {limpiar(al)}",new_x=XPos.LMARGIN,new_y=YPos.NEXT)
+                    pdf.ln(3)
+                pdf.set_fill_color(color_r,color_g,color_b)
+                pdf.set_font("Helvetica","B",10); pdf.set_text_color(255,255,255)
                 pdf.multi_cell(0,7,f" \"{limpiar(ficha_p['mensaje_final'])}\"",fill=True)
                 pdf.ln(6)
-
-                # QR con HTML page completo
-                ficha_html = generar_html_ficha(patologia, tipo, folio, fecha_str, nombre_pat_display)
-                import qrcode as _qrc
-                import io as _io
-                qr = _qrc.QRCode(version=None, box_size=3, border=2,
-                    error_correction=_qrc.constants.ERROR_CORRECT_L)
-                # El QR lleva el HTML completo de la ficha como data URI (para demo)
-                # En producción apuntaría a URL de Streamlit Share
-                qr_url = f"SITRE-FICHA\n{folio}\n{nombre_pat_display}\n{ficha_p['titulo']}\n\n{limpiar(ficha_p['mito_cuerpo'][:200])}"
-                qr.add_data(qr_url)
-                qr.make(fit=True)
-                qr_img_p = qr.make_image(fill_color="black", back_color="white")
-                qr_buf_p = _io.BytesIO()
-                qr_img_p.save(qr_buf_p, format="PNG")
-                qr_path_p = "sitre_qr_paciente.png"
-                with open(qr_path_p, "wb") as f_qr:
-                    f_qr.write(qr_buf_p.getvalue())
-
-                pdf.set_font("Helvetica","B",9)
-                pdf.set_text_color(color_r, color_g, color_b)
-                pdf.cell(140,6,"Escanee el QR para ver esta ficha en su celular:",new_x=XPos.RMARGIN)
+                # QR página 2
+                pdf.set_font("Helvetica","B",9); pdf.set_text_color(color_r,color_g,color_b)
+                pdf.cell(135,6,"Escanee el QR para ver esta ficha en su celular:",new_x=XPos.RMARGIN)
                 pdf.ln(2)
-                y_qr = pdf.get_y()
-                pdf.image(qr_path_p, x=155, y=y_qr - 8, w=40, h=40)
-
-                pdf.set_font("Helvetica","I",7)
-                pdf.set_text_color(150,150,150)
-                pdf.ln(35)
-                pdf.multi_cell(0,4,"SITRE CDSS v2.0 · Sistema de Triage Respiratorio · Motor determinisico basado en guias IDSA/OMS/AAP. Generado automaticamente. La decision final corresponde al medico tratante.")
+                y_qr2 = pdf.get_y()
+                try:
+                    pdf.image(qr_path, x=155, y=y_qr2-6, w=40, h=40)
+                except Exception:
+                    pass
+                pdf.ln(36)
+                pdf.set_font("Helvetica","I",7); pdf.set_text_color(150,150,150)
+                pdf.multi_cell(0,4,"SITRE CDSS v2.0 · Motor determinisico · Guias IDSA/OMS/AAP. Generado automaticamente. Decision final corresponde al medico tratante.")
 
                 return bytes(pdf.output())
 
-            st.download_button(label="📥 Descargar Reporte PDF", data=generar_pdf(),
+            st.download_button(
+                label="📥 Descargar Reporte PDF",
+                data=generar_pdf(),
                 file_name=f"SITRE_{nombre_pac.replace(' ','_')}.pdf",
-                mime="application/pdf", use_container_width=True, type="primary")
+                mime="application/pdf",
+                use_container_width=True, type="primary"
+            )
         else:
             st.info("Instala fpdf2: pip install fpdf2")
 
